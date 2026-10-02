@@ -26,6 +26,7 @@ public class GoogleRouteTest {
         check(GoogleRoute.mode(url)==2,"walking mode");check(GoogleRoute.mode(url.replace("!3e2","!3e0"))==0,"drive mode");
         try{GoogleRoute.mode(url.replace("!3e2","!3e3"));throw new AssertionError("transit silently downgraded");}catch(java.io.IOException expected){}
         try{GoogleRoute.mode(url+"!3m4!1m2!1d1!2d2");throw new AssertionError("via discarded");}catch(java.io.IOException expected){}
+        try{GoogleRoute.requestUrl(Arrays.asList("Tokyo","Shinjuku"),2);throw new AssertionError("Unresolved names sent to Google web geometry service");}catch(java.io.IOException expected){check(expected.getMessage().contains("座標"),"actionable missing coordinate message");}
         String request=GoogleRoute.requestUrl(Arrays.asList("1,2","1.1,2.1","1.2,2.2"),2);
         String pb=URLDecoder.decode(request.substring(request.indexOf("pb=")+3),"UTF-8");
         check(pb.startsWith("!1m4!3m2!3d1.0!4d2.0!6e2!1m4!3m2!3d1.1!4d2.1!6e2"),"all waypoints ordered");

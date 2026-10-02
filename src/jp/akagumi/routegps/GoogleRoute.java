@@ -37,7 +37,7 @@ public final class GoogleRoute {
     public static String requestUrl(List<String> places,int mode)throws Exception{
         StringBuilder pb=new StringBuilder();
         if(places.size()<2||mode<0||mode>2)throw new IOException("経路と移動手段を確認してください");
-        for(String place:places){double[] p=MapsLink.coordinate(place);if(p==null&&place.contains("!"))throw new IOException("この場所名は読み取れません。Google Mapsで座標を指定して共有してください。");Pb location=p==null?field(2,'s',place):group(3,field(3,'d',p[0]),field(4,'d',p[1]));pb.append(group(1,location,field(6,'e',2)).wire);}
+        for(String place:places){double[] p=MapsLink.coordinate(place);if(p==null)throw new IOException("座標を読み取れない地点があります："+place+"。Google Mapsで地図上の地点を指定して経路を共有してください。");Pb location=group(3,field(3,'d',p[0]),field(4,'d',p[1]));pb.append(group(1,location,field(6,'e',2)).wire);}
         Pb screen=group(3,group(1,field(1,'d',24960.741896132306),field(2,'d',0),field(3,'d',0)),group(2,field(1,'f',0),field(2,'f',0),field(3,'f',0)),group(3,field(1,'i',1024),field(2,'i',768)),field(4,'f',13.1));
         // Keep explicit web feature flags separate from route constraints.
         List<Pb> features=new ArrayList<>();features.add(field(32,'i',1));features.add(field(49,'b',1));features.add(group(63));
