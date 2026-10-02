@@ -13,7 +13,7 @@ public final class MapsClient {
             if(!u.getHost().equalsIgnoreCase("maps.app.goo.gl")&&!u.getHost().equalsIgnoreCase("goo.gl"))return address;
             HttpURLConnection c=(HttpURLConnection)u.toURL().openConnection();
             c.setInstanceFollowRedirects(false);c.setConnectTimeout(15000);c.setReadTimeout(15000);
-            c.setRequestProperty("User-Agent","RouteGPS/1.1.7 (+https://github.com/jyup-escape/route-gps)");
+            c.setRequestProperty("User-Agent","RouteGPS/1.1.8 (+https://github.com/jyup-escape/route-gps)");
             try {
                 int status=c.getResponseCode();String location=c.getHeaderField("Location");
                 if(status<300||status>399||location==null)throw new IOException("短縮リンクを展開できません。ブラウザで開いた後の長い経路URLを貼り付けてください");
