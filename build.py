@@ -16,9 +16,11 @@ def run(*args):
     subprocess.run([str(a) for a in args],cwd=ROOT,env=env,check=True)
 TEST=BUILD/'tests';TEST.mkdir(exist_ok=True)
 KXML=TOOLS/'test-kxml2.jar'
+JSON=TOOLS/'test-json.jar'
+TEST_CP=str(KXML)+os.pathsep+str(JSON)
 if not KXML.exists():raise RuntimeError('Run setup_tools.py to prepare GPX test dependency')
-run(JDK/'javac.exe','-encoding','UTF-8','-classpath',KXML,'-d',TEST,*[ROOT/'src/jp/akagumi/routegps'/n for n in ['Route.java','WalkSimulation.java','MapsLink.java','Gpx.java','RouteWindow.java']],*[ROOT/'tests'/n for n in ['RouteTest.java','WalkSimulationTest.java','MapsLinkTest.java','GpxTest.java']])
-for test in ['RouteTest','WalkSimulationTest','MapsLinkTest','GpxTest']:run(JDK/'java.exe','-cp',str(TEST)+os.pathsep+str(KXML),test)
+run(JDK/'javac.exe','-encoding','UTF-8','-classpath',TEST_CP,'-d',TEST,*[ROOT/'src/jp/akagumi/routegps'/n for n in ['Route.java','WalkSimulation.java','MapsLink.java','Gpx.java','RouteWindow.java','RoadClient.java','GoogleRoute.java','RouteProjection.java']],*[ROOT/'tests'/n for n in ['RouteTest.java','WalkSimulationTest.java','MapsLinkTest.java','GpxTest.java','GoogleRouteTest.java']])
+for test in ['RouteTest','WalkSimulationTest','MapsLinkTest','GpxTest','GoogleRouteTest']:run(JDK/'java.exe','-cp',str(TEST)+os.pathsep+TEST_CP,test)
 run(BT/'aapt2.exe','compile','--dir',ROOT/'res','-o',BUILD/'resources.zip')
 RGEN=BUILD/'generated';RGEN.mkdir(exist_ok=True)
 run(BT/'aapt2.exe','link','-o',BUILD/'resources.apk','--manifest',ROOT/'AndroidManifest.xml','-I',ANDROID,'--java',RGEN,BUILD/'resources.zip')

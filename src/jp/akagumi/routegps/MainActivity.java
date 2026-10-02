@@ -46,17 +46,17 @@ public class MainActivity extends Activity {
         routeSource=text("",14);body.addView(routeSource);
         importButton=button("GPXファイルを読み込む",body);importButton.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,20);});
         body.addView(text("地点数・距離・GPXサイズの固定上限なし（端末の空きメモリの範囲内）。",12));
-        section(body,"Google MapsからGPXを作る");
+        section(body,"Google Mapsの道筋を取り込む");
         mapsInput=new EditText(this);mapsInput.setHint("Google Mapsの経路リンクを貼り付け");mapsInput.setSingleLine(true);mapsInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_URI);mapsInput.setContentDescription("Google Mapsの経路リンク");body.addView(mapsInput);
-        mapsButton=button("リンクから徒歩ルートを作成",body);mapsButton.setOnClickListener(v->convertMaps());
-        body.addView(text("出発地・経由地・目的地から徒歩ルートを再計算します。Google Mapsで表示された道順とは異なる場合があります。場所名は候補を選んで確認できます。",12));
-        body.addView(text("短縮リンクはGoogleへ、場所名はNominatimへ、座標はOSRMへ送信します。場所の共有ではなく、出発地と目的地が入った経路を共有してください。",12));
+        mapsButton=button("Googleのルート候補を取得",body);mapsButton.setOnClickListener(v->convertMaps());
+        body.addView(text("Google側の道筋を取得します。候補の距離・道筋をGoogle Mapsと確認して選択してください。共有画面で選んだ候補は自動判定できません。",12));
+        body.addView(text("APIキー不要。リンクと経由地をGoogleに送信します。取得できない場合はエラーを表示し、別の道路検索へ自動で切り替えません。",12));
         exportButton=button("このルートをGPXで保存",body);exportButton.setOnClickListener(v->{try{new Route(Route.parse(preparedText),false);exportCoordinates=preparedText;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/gpx+xml");i.putExtra(Intent.EXTRA_TITLE,"RouteGPS-route.gpx");startActivityForResult(i,21);}catch(Exception e){toast("先にルートを作成するかGPXを読み込んでください");}});
         body.addView(text("始点・経由地・終点を緯度,経度で入力（2地点以上・区間ごとに道路検索）",14));
         routeInput=new EditText(this);routeInput.setTextSize(14);routeInput.setTypeface(Typeface.MONOSPACE);routeInput.setGravity(Gravity.TOP);routeInput.setMinLines(4);routeInput.setMaxLines(7);
         routeInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE|android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         routeInput.setContentDescription("ルート座標：各行に緯度,経度");routeInput.setSaveEnabled(false);body.addView(routeInput);
-        roadButton=button("道に沿う徒歩ルートを作成・信号を取得",body);
+        roadButton=button("座標からOSMの徒歩ルートを作成・信号を取得",body);
         roadButton.setOnClickListener(v->fetchRoad(false));
         body.addView(text("作成時に座標をOSRMへ、信号取得時にルートをOverpassへ送信します。ルート生成：OSRM / FOSSGIS · 地図データ © OpenStreetMap contributors（ODbL）",12));
         TextView attribution=text("データとサービスについて ↗",12);attribution.setTextColor(ACCENT);attribution.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://routing.openstreetmap.de/about.html"))));body.addView(attribution);
@@ -93,6 +93,7 @@ public class MainActivity extends Activity {
         body.addView(text("終点では位置を保持します。停止すると疑似GPSを解除します。設定変更は停止後に行ってください。",12));
         android.content.SharedPreferences prefs=getPreferences(0);
         preparedText=prefs.getString("preparedText","");sourceLabel=prefs.getString("sourceLabel","");
+        if(sourceLabel.startsWith("Google Mapsの経由地から再計算"))sourceLabel="旧版でOSRM再計算した道筋（Googleの候補を再取得してください）";
         routeInput.setText(prefs.getString("route",DEMO));speed.setText(prefs.getString("speed","5"));loop.setChecked(prefs.getBoolean("loop",false));
         acceleration.setText(prefs.getString("acceleration","0.5"));braking.setText(prefs.getString("braking","0.8"));variation.setText(prefs.getString("variation","15"));
         redChance.setText(prefs.getString("red","50"));waitMin.setText(prefs.getString("waitMin","15"));waitMax.setText(prefs.getString("waitMax","60"));signalInput.setText(prefs.getString("signals",""));
@@ -150,30 +151,28 @@ public class MainActivity extends Activity {
         }catch(Exception e){runOnUiThread(()->{importing=false;update();toast("GPX処理エラー："+e.getMessage());});}},"gpx-document").start();
     }
     private void convertMaps(){
-        if(importing||PlaybackService.active)return;final String link=mapsInput.getText().toString();final boolean close=loop.isChecked();
-        importing=true;routeSource.setText("Google Mapsの経路リンクを読み込み中…");update();
+        if(importing||PlaybackService.active)return;final String link=mapsInput.getText().toString();
+        if(SystemClock.elapsedRealtime()-lastNetwork<2000){toast("少し時間をおいて再試行してください");return;}lastNetwork=SystemClock.elapsedRealtime();
+        importing=true;routeSource.setText("Googleの道筋を取得中…");update();
         new Thread(()->{try{
-            List<String> names=MapsLink.places(MapsClient.expand(link));double[][] points=new double[names.size()][2];
-            for(int i=0;i<names.size();i++){
-                String name=names.get(i);double[] p=MapsLink.coordinate(name);
-                if(p==null){
-                    List<MapsClient.Place> choices=MapsClient.search(name);final double[][] selected=new double[1][];
-                    java.util.concurrent.CountDownLatch ready=new java.util.concurrent.CountDownLatch(1);
-                    String[] labels=new String[choices.size()];for(int j=0;j<labels.length;j++)labels[j]=choices.get(j).label;
-                    runOnUiThread(()->{if(isFinishing()||isDestroyed()){ready.countDown();return;}new AlertDialog.Builder(this).setTitle("場所を確認："+name).setItems(labels,(d,n)->{selected[0]=choices.get(n).point;ready.countDown();}).setNegativeButton("キャンセル",(d,n)->ready.countDown()).setOnCancelListener(d->ready.countDown()).show();});
-                    if(!ready.await(5,java.util.concurrent.TimeUnit.MINUTES)||selected[0]==null)throw new IOException("変換をキャンセルしました");p=selected[0];
-                }points[i]=p;
-            }
-            runOnUiThread(()->routeSource.setText("経由地から徒歩ルートを作成中…"));
-            RoadClient.Result done=RoadClient.walking(points,close,message->runOnUiThread(()->routeSource.setText(message)));
-            runOnUiThread(()->{importing=false;preparedText=done.coordinates;sourceLabel="Google Mapsの経由地から再計算した徒歩ルート（OSM）";routeInput.setText(done.coordinates);signalInput.setText(done.signals);save();update();if(!done.warning.isEmpty())toast(done.warning);});
-        }catch(Exception e){runOnUiThread(()->{importing=false;update();toast("変換できませんでした："+e.getMessage());});}},"maps-to-gpx").start();
+            List<GoogleRoute.Candidate> candidates=GoogleRoute.fetch(MapsClient.expand(link));
+            runOnUiThread(()->{
+                if(isFinishing()||isDestroyed())return;
+                String[] labels=new String[candidates.size()];for(int i=0;i<labels.length;i++)labels[i]=candidates.get(i).label();
+                new AlertDialog.Builder(this).setTitle("Google Mapsと距離を確認して選択").setItems(labels,(dialog,index)->{
+                    GoogleRoute.Candidate candidate=candidates.get(index);
+                    preparedText=RoadClient.format(candidate.route);sourceLabel=String.format(Locale.JAPAN,"Googleから取得した道筋 · Google表示 %.1f km（距離計算方式により差が出ます）",candidate.reportedDistance/1000);
+                    importing=false;routeInput.setText(preparedText);signalInput.setText("");save();update();
+                }).setNegativeButton("キャンセル",(dialog,index)->{importing=false;update();}).setOnCancelListener(dialog->{importing=false;update();}).show();
+            });
+        }catch(Exception e){runOnUiThread(()->{importing=false;update();toast("Googleの道筋を取得できませんでした。現在のルートは変更していません。\n"+e.getMessage());});}},"google-route-import").start();
     }
     private void acceptShare(Intent intent){if(Intent.ACTION_SEND.equals(intent.getAction())){String text=intent.getStringExtra(Intent.EXTRA_TEXT);if(text!=null)mapsInput.setText(text);}}
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);acceptShare(intent);}
     private void fetchRoad(boolean signalsOnly){
         if(importing||PlaybackService.active)return;
         try{
+            if(!signalsOnly&&!preparedText.isEmpty()&&routeInput.getText().toString().equals(preparedText))throw new IllegalArgumentException("取込済みの道筋はそのまま再生・保存できます。OSMで別ルートを作る場合は座標欄を始点・経由地・終点に置き換えてください。");
             double[][] points=Route.parse(routeInput.getText().toString());
             if(signalsOnly&&!routeInput.getText().toString().equals(preparedText))throw new IllegalArgumentException("先に徒歩ルートを作成するかGPXを読み込んでください");
             if(SystemClock.elapsedRealtime()-lastNetwork<2000)throw new IllegalArgumentException("少し時間をおいて再試行してください");
@@ -189,23 +188,22 @@ public class MainActivity extends Activity {
         }catch(Exception e){toast(e.getMessage());}
     }
     private class Preview extends View {
-        Route route,cachedRoute;Paint pen=new Paint(Paint.ANTI_ALIAS_FLAG);Path cachedPath;int cachedWidth,cachedHeight;double origin,cos,scale,centerX,centerY;
+        Route route,cachedRoute;Paint pen=new Paint(Paint.ANTI_ALIAS_FLAG);Path cachedPath;int cachedWidth,cachedHeight;double scale,centerX,centerY;RouteProjection projection;
         Preview(){super(MainActivity.this);setBackgroundColor(Color.WHITE);setContentDescription("ルート形状と再生位置のプレビュー");}
         @Override protected void onDraw(Canvas c){super.onDraw(c);if(route==null){pen.setColor(INK);pen.setTextSize(dp(14));c.drawText("ルートを入力すると表示されます",dp(16),dp(36),pen);return;}
             if(cachedRoute!=route||cachedWidth!=getWidth()||cachedHeight!=getHeight()){
             double minX=Double.MAX_VALUE,minY=Double.MAX_VALUE,maxX=-Double.MAX_VALUE,maxY=-Double.MAX_VALUE;
-            origin=route.points[0][1];cos=Math.max(0.01,Math.cos(Math.toRadians(route.points[0][0])));
-            for(double[] p:route.points){double x=wrap(p[1]-origin)*cos,y=-p[0];minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);}
+            projection=new RouteProjection(route);
+            for(int i=0;i<route.points.length;i++){double[] p=route.points[i];double x=projection.x[i],y=RouteProjection.y(p[0]);minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);}
             scale=Math.min((getWidth()-dp(48))/Math.max(1e-6,maxX-minX),(getHeight()-dp(48))/Math.max(1e-6,maxY-minY));
             centerX=(minX+maxX)/2;centerY=(minY+maxY)/2;
             Path path=new Path();
-            for(int k=0,count=Math.min(4096,route.points.length);k<count;k++){int i=(int)((long)k*(route.points.length-1)/(count-1));double[] p=route.points[i];float x=(float)(getWidth()/2+(wrap(p[1]-origin)*cos-centerX)*scale),y=(float)(getHeight()/2+(-p[0]-centerY)*scale);if(i==0)path.moveTo(x,y);else path.lineTo(x,y);}
+            for(int k=0,count=Math.min(4096,route.points.length);k<count;k++){int i=(int)((long)k*(route.points.length-1)/(count-1));double[] p=route.points[i];float x=(float)(getWidth()/2+(projection.x[i]-centerX)*scale),y=(float)(getHeight()/2+(RouteProjection.y(p[0])-centerY)*scale);if(i==0)path.moveTo(x,y);else path.lineTo(x,y);}
             cachedPath=path;cachedRoute=route;cachedWidth=getWidth();cachedHeight=getHeight();
             }
             pen.setColor(ACCENT);pen.setStyle(Paint.Style.STROKE);pen.setStrokeWidth(dp(3));c.drawPath(cachedPath,pen);pen.setStyle(Paint.Style.FILL);
-            for(int i:new int[]{0,route.points.length-1}){double[] p=route.points[i];pen.setColor(i==0?ACCENT:INK);c.drawCircle((float)(getWidth()/2+(wrap(p[1]-origin)*cos-centerX)*scale),(float)(getHeight()/2+(-p[0]-centerY)*scale),dp(5),pen);}
-            if(PlaybackService.active){pen.setColor(Color.rgb(224,103,25));c.drawCircle((float)(getWidth()/2+(wrap(PlaybackService.longitude-origin)*cos-centerX)*scale),(float)(getHeight()/2+(-PlaybackService.latitude-centerY)*scale),dp(7),pen);}
+            for(int i:new int[]{0,route.points.length-1}){double[] p=route.points[i];pen.setColor(i==0?ACCENT:INK);c.drawCircle((float)(getWidth()/2+(projection.x[i]-centerX)*scale),(float)(getHeight()/2+(RouteProjection.y(p[0])-centerY)*scale),dp(5),pen);}
+            if(PlaybackService.active){pen.setColor(Color.rgb(224,103,25));c.drawCircle((float)(getWidth()/2+(projection.markerX(PlaybackService.travelled,PlaybackService.longitude)-centerX)*scale),(float)(getHeight()/2+(RouteProjection.y(PlaybackService.latitude)-centerY)*scale),dp(7),pen);}
         }
-        double wrap(double d){return (d+540)%360-180;}
     }
 }

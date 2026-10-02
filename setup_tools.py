@@ -56,3 +56,9 @@ kxml_url='https://repo.maven.apache.org/maven2/net/sf/kxml/kxml2/2.3.0/kxml2-2.3
 kxml=fetch(kxml_url)
 if hashlib.sha1(kxml).hexdigest()!=fetch(kxml_url+'.sha1').decode().split()[0]:raise RuntimeError('KXML checksum mismatch')
 (ROOT/'test-kxml2.jar').write_bytes(kxml)
+
+# JVM-only org.json; the APK uses Android standard API.
+json_url="https://repo.maven.apache.org/maven2/org/json/json/20240303/json-20240303.jar"
+json_jar=fetch(json_url)
+if hashlib.sha1(json_jar).hexdigest()!=fetch(json_url+".sha1").decode().split()[0]:raise RuntimeError("JSON checksum mismatch")
+(ROOT/"test-json.jar").write_bytes(json_jar)

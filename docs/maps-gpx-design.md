@@ -15,3 +15,16 @@ URLはGoogle公式Maps URLsのorigin/destination/waypointsを読み取ります�
 参考： https://developers.google.com/maps/documentation/urls/get-started 、 https://operations.osmfoundation.org/policies/nominatim/
 
 既存のAPI公開環境ではAndroid画面のレンダリング・ファイル選択を実機で自動検証できていません。URL解析、GPX読み書き、ルート計算とAndroidコンパイルをホスト上で検証します。
+
+## 1.1.6の修正
+
+既存のユーザー添付画面を主参照として、標準ボタンとダイアログを維持します。Google Maps側の表示を比較の参照に使い、取得した距離・候補名を選択前に提示します。
+
+| 決定 | 根拠 |
+| --- | --- |
+| 「Googleのルート候補を取得」と表示 | 共有画面で選んだ候補を保証できないため、完全一致の変換と呼ばない |
+| Google表示距離・候補名・地点数を選択ダイアログに表示 | 添付画像の12,929kmとの照合が可能 |
+| OSRMへ自動で切り替えない | ユーザーが元の道筋の取得を要求 |
+| Mercator・連続経度を使う | Google Mapsとの見え方の差・日付変更線の折返しを解消 |
+
+Web応答スキーマの調査参照: https://github.com/alltechdev/vela-dpad/blob/main/docs/SPEC.md 。実装は独自のprotobufテキスト組立と厳格なE7座標解析。Googleの非公式Web形式を利用するため、変更時は失敗を表示し、代替形状は生成しません。検証用の応答本文や利用者の具体的リンクはGitと配布ZIPへ含めません。

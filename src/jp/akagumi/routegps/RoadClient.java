@@ -78,7 +78,7 @@ public final class RoadClient {
     private static double wrap(double d){return (d+540)%360-180;}
     static String request(String address,String post)throws Exception{
         HttpURLConnection conn=(HttpURLConnection)new URL(address).openConnection();
-        conn.setConnectTimeout(15000);conn.setReadTimeout(35000);conn.setRequestProperty("User-Agent","RouteGPS/1.1.5 (+https://github.com/jyup-escape/route-gps)");
+        conn.setConnectTimeout(15000);conn.setReadTimeout(35000);conn.setRequestProperty("User-Agent","RouteGPS/1.1.6 (+https://github.com/jyup-escape/route-gps)");
         try{
             if(post!=null){conn.setRequestMethod("POST");conn.setDoOutput(true);conn.setRequestProperty("Content-Type","application/x-www-form-urlencoded; charset=UTF-8");try(OutputStream out=conn.getOutputStream()){out.write(post.getBytes(StandardCharsets.UTF_8));}}
             int status=conn.getResponseCode();if(status!=200)throw new IOException("通信エラー HTTP "+status+"。時間をおいて再試行してください。");
