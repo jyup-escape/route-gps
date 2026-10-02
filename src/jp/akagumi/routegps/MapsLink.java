@@ -43,6 +43,18 @@ public final class MapsLink {
         }
         if(out.size()<2||out.size()>25)throw new IllegalArgumentException("出発地・目的地を含む2〜25地点の経路リンクを使ってください");
         for(String p:out)if(p.trim().isEmpty()||p.equalsIgnoreCase("My Location")||p.equals("現在地"))throw new IllegalArgumentException("『現在地』を具体的な場所に変更してから経路を共有してください");
+        // Some shared direction URLs contain exact place coordinates in data=.
+        // Use only a complete, unambiguous sequence of place blocks. Never @viewport.
+        String path=decode(u.getRawPath());int data=path.indexOf("/data=");
+        if(data>=0){
+            String number="([+-]?[0-9]+(?:\\.[0-9]+)?)";
+            Matcher points=Pattern.compile("!1m5!1m1!1s[^!]+!2m2!1d"+number+"!2d"+number+"(?=!|$)").matcher(path.substring(data+6));
+            List<String> embedded=new ArrayList<>();
+            while(points.find()){
+                String value=points.group(2)+","+points.group(1);coordinate(value);embedded.add(value);
+            }
+            if(embedded.size()==out.size())return embedded;
+        }
         return out;
     }
     public static double[] coordinate(String place) {

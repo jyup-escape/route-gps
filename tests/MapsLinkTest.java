@@ -12,6 +12,11 @@ public class MapsLinkTest {
         rejects("https://www.google.com/maps/@48,2,10z");rejects("https://google.com.evil.test/maps/dir/A/B");rejects("http://www.google.com/maps/dir/A/B");
         rejects("https://www.google.com@evil.test/maps/dir/A/B");rejects("https://www.google.com:8443/maps/dir/A/B");
         check(MapsLink.coordinate("Paris France")==null);check(MapsLink.extract("経路 https://maps.app.goo.gl/abc\n").equals("https://maps.app.goo.gl/abc"));
+        String data="!4m14!4m13!1m5!1m1!1sstation!2m2!1d11.0818138!2d49.446407!1m5!1m1!1smetro!2m2!1d2.365158!2d48.881203!3e2";
+        p=MapsLink.places("https://www.google.com/maps/dir/Nuremberg+Central+Station/Louis+Blanc/@1,2,15z/data="+data);
+        check(p.equals(Arrays.asList("49.446407,11.0818138","48.881203,2.365158")));
+        p=MapsLink.places("https://www.google.com/maps/dir/A/B/C/data="+data);check(p.equals(Arrays.asList("A","B","C")));
+        p=MapsLink.places("https://www.google.com/maps/dir/A/B/@49,11,15z/");check(p.equals(Arrays.asList("A","B")));
         System.out.println("PASS: Maps URL endpoints, ordering, path URLs, blank origin, viewport rejection, host validation");
     }
 }
