@@ -17,7 +17,7 @@ def run(*args):
 TEST=BUILD/'tests';TEST.mkdir(exist_ok=True)
 KXML=TOOLS/'test-kxml2.jar'
 if not KXML.exists():raise RuntimeError('Run setup_tools.py to prepare GPX test dependency')
-run(JDK/'javac.exe','-encoding','UTF-8','-classpath',KXML,'-d',TEST,*[ROOT/'src/jp/akagumi/routegps'/n for n in ['Route.java','WalkSimulation.java','MapsLink.java','Gpx.java']],*[ROOT/'tests'/n for n in ['RouteTest.java','WalkSimulationTest.java','MapsLinkTest.java','GpxTest.java']])
+run(JDK/'javac.exe','-encoding','UTF-8','-classpath',KXML,'-d',TEST,*[ROOT/'src/jp/akagumi/routegps'/n for n in ['Route.java','WalkSimulation.java','MapsLink.java','Gpx.java','RouteWindow.java']],*[ROOT/'tests'/n for n in ['RouteTest.java','WalkSimulationTest.java','MapsLinkTest.java','GpxTest.java']])
 for test in ['RouteTest','WalkSimulationTest','MapsLinkTest','GpxTest']:run(JDK/'java.exe','-cp',str(TEST)+os.pathsep+str(KXML),test)
 run(BT/'aapt2.exe','compile','--dir',ROOT/'res','-o',BUILD/'resources.zip')
 RGEN=BUILD/'generated';RGEN.mkdir(exist_ok=True)

@@ -63,9 +63,13 @@ public class PlaybackService extends Service {
             }else coordinates=intent.getStringExtra("route");
             route=new Route(Route.parse(coordinates),false);
             kmh=intent.getDoubleExtra("kmh",5);
+            String signals=intent.getStringExtra("signals");
+            if(intent.getBooleanExtra("signalsFile",false)){
+                StringBuilder text=new StringBuilder();try(BufferedReader reader=new BufferedReader(new InputStreamReader(new FileInputStream(new File(getFilesDir(),"playback-signals.txt")),StandardCharsets.UTF_8))){String line;while((line=reader.readLine())!=null)text.append(line).append('\n');}signals=text.toString();
+            }
             simulation=new WalkSimulation(route,kmh,intent.getDoubleExtra("acceleration",0.5),intent.getDoubleExtra("braking",0.8),
                 intent.getDoubleExtra("variation",15),intent.getDoubleExtra("red",50),intent.getDoubleExtra("waitMin",15),intent.getDoubleExtra("waitMax",60),
-                WalkSimulation.parseSignals(intent.getStringExtra("signals")),loop,System.nanoTime());
+                WalkSimulation.parseSignals(signals),loop,System.nanoTime());
             travelled=0;total=route.length;actualKmh=0;paused=false;finished=false;stopping=false;error="";state="準備中";
             startForeground(1,notification());
             for(String provider:new String[]{"gps","network","fused"}) {

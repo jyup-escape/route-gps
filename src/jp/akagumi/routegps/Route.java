@@ -4,13 +4,12 @@ import java.util.*;
 
 /** Pure Java, metres and seconds. Spherical paths handle the date line. */
 public final class Route {
-    public static final int MAX_POINTS = 100000;
     public static final double EARTH = 6371008.8;
     public final double[][] points;
     public final double[] cumulative;
     public final double length;
     public Route(double[][] input, boolean close) {
-        if (input.length < 2 || input.length > MAX_POINTS) throw new IllegalArgumentException("ルートは2〜100000地点で指定してください");
+        if (input.length < 2) throw new IllegalArgumentException("ルートは2地点以上で指定してください");
         List<double[]> clean = new ArrayList<>();
         for (double[] p : input) {
             if (p.length != 2 || !Double.isFinite(p[0]) || !Double.isFinite(p[1]) || Math.abs(p[0])>90 || Math.abs(p[1])>180)
@@ -60,7 +59,9 @@ public final class Route {
     public static double[][] parse(String text) {
         List<double[]> ps=new ArrayList<>();
         int line=0;
-        for(String raw:text.split("\\r?\\n")) {
+        for(int offset=0;offset<text.length();) {
+            int end=text.indexOf('\n',offset);if(end<0)end=text.length();
+            String raw=text.substring(offset,end);offset=end+1;
             line++;
             String s=raw.trim();
             if(s.isEmpty() || s.startsWith("#")) continue;
@@ -68,7 +69,6 @@ public final class Route {
             if(parts.length!=2) throw new IllegalArgumentException(line+"行目：緯度,経度の形式で入力してください");
             try {ps.add(new double[]{Double.parseDouble(parts[0]),Double.parseDouble(parts[1])});}
             catch(NumberFormatException e) {throw new IllegalArgumentException(line+"行目：座標を数値で入力してください");}
-            if(ps.size()>MAX_POINTS) throw new IllegalArgumentException("最大100000地点です");
         }
         double[][] result=ps.toArray(new double[0][]);
         new Route(result,false);
