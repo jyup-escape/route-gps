@@ -22,14 +22,15 @@ public final class WalkSimulation {
             double variationPercent,double redPercent,double waitMin,double waitMax,
             double[] signals,boolean loop,long seed) {
         this.route=route;this.loop=loop;
-        if(!Double.isFinite(cruiseKmh)||cruiseKmh<0.1||!valid(acceleration,0.05,2)||!valid(braking,0.05,2)
-                ||!valid(variationPercent,0,30)||!valid(redPercent,0,100)
-                ||!valid(waitMin,1,180)||!valid(waitMax,waitMin,180))
-            throw new IllegalArgumentException("巡航速度は0.1km/h以上の有限の数値、加減速度0.05〜2m/s²、ゆらぎ0〜30%、赤の確率0〜100%、待ち時間1〜180秒（最小≦最大）で設定してください");
+        if(!Double.isFinite(cruiseKmh)||cruiseKmh<0.1||!positive(acceleration)||!positive(braking)
+                ||!nonnegative(variationPercent)||!valid(redPercent,0,100)
+                ||!nonnegative(waitMin)||!nonnegative(waitMax)||waitMax<waitMin)
+            throw new IllegalArgumentException("巡航速度は0.1km/h以上、加減速度は0より大きく、ゆらぎ・待ち時間は0以上、赤の確率は0〜100%で指定してください。すべて有限の数値で、待ち時間は最小≦最大です。");
         if(loop && Route.distance(route.points[0],route.points[route.points.length-1])>2)
             throw new IllegalArgumentException("周回には始点に戻る徒歩ルートが必要です。周回をONにして徒歩ルートを作り直してください。");
         cruise=cruiseKmh/3.6;this.acceleration=acceleration;this.braking=braking;
         variation=variationPercent/100;redProbability=redPercent/100;
+        if(!Double.isFinite(cruise*(1+variation)))throw new IllegalArgumentException("設定から計算する速度が数値の表現範囲を超えています。速度かゆらぎを小さくしてください。");
         this.waitMin=waitMin;this.waitMax=waitMax;random=new Random(seed);
         TreeSet<Double> sorted=new TreeSet<>();
         for(double s:signals){if(!Double.isFinite(s)||s<=0||s>=route.length)throw new IllegalArgumentException("信号の距離は0より大きくルートの全長より小さい値にしてください");sorted.add(s);}
@@ -37,6 +38,8 @@ public final class WalkSimulation {
         targetCruise=cruise;newLap();
     }
     private static boolean valid(double n,double min,double max){return Double.isFinite(n)&&n>=min&&n<=max;}
+    private static boolean positive(double n){return Double.isFinite(n)&&n>0;}
+    private static boolean nonnegative(double n){return Double.isFinite(n)&&n>=0;}
     private void newLap(){
         nextSignal=0;red=new boolean[signals.length];waits=new double[signals.length];
         for(int i=0;i<signals.length;i++){red[i]=random.nextDouble()<redProbability;waits[i]=waitMin+random.nextDouble()*(waitMax-waitMin);}
@@ -71,7 +74,7 @@ public final class WalkSimulation {
         if(paused||finished)return;
         if(waitRemaining>0){waitRemaining=Math.max(0,waitRemaining-dt);return;}
         changeIn-=dt;
-        if(changeIn<=0){targetCruise=cruise*(1+(random.nextDouble()*2-1)*variation);changeIn=6+random.nextDouble()*8;}
+        if(changeIn<=0){targetCruise=Math.max(0,cruise*(1+(random.nextDouble()*2-1)*variation));changeIn=6+random.nextDouble()*8;}
         double boundary=nextStop(),remaining=Math.max(0,boundary-distance);
         if(remaining<1e-8 && speed<1e-6){arrive(boundary);return;}
         // Sample gentle turns over a 6m span, and slow before sharp changes in direction.
@@ -79,7 +82,9 @@ public final class WalkSimulation {
         double turnFactor=1-0.35*Math.min(1,turn/90);
         double desired=targetCruise*turnFactor;
         // Solve (v0+v1)*dt/2 + v1²/(2b) <= remaining.
-        double safe=Math.max(0,(-braking*dt+Math.sqrt(braking*braking*dt*dt-4*braking*speed*dt+8*braking*remaining))/2);
+        // Rationalized root avoids b² overflow and subtractive cancellation at large b.
+        double allowance=Math.max(0,2*remaining-speed*dt);
+        double safe=2*(allowance/(dt+Math.hypot(dt,2*Math.sqrt(allowance)/Math.sqrt(braking))));
         if(!Double.isFinite(safe))safe=0;
         desired=Math.min(desired,safe);
         double next=Math.max(0,speed+Math.max(-braking*dt,Math.min(acceleration*dt,desired-speed)));

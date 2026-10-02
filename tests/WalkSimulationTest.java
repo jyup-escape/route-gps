@@ -62,6 +62,18 @@ public class WalkSimulationTest {
         check(fast.paused&&fast.speed==0,"high speed smooth stop");
         new WalkSimulation(highway,1000000,0.5,0.8,0,0,1,1,new double[0],false,9);
         try{new WalkSimulation(highway,Double.POSITIVE_INFINITY,0.5,0.8,0,0,1,1,new double[0],false,9);throw new AssertionError("infinite cruise accepted");}catch(IllegalArgumentException expected){}
+        WalkSimulation unlimited=new WalkSimulation(highway,300,100,150,250,100,900,1200,new double[]{1000},false,12);
+        for(int i=0;i<1000;i++)tick(unlimited,0.02);
+        check(unlimited.stoppedSignals==1&&unlimited.waitRemaining>850,"unlimited acceleration, variation and wait");
+        WalkSimulation enormousBraking=new WalkSimulation(STRAIGHT,100,1000000000000.0,1000000000000.0,200,0,0,0,new double[0],false,1);
+        for(int i=0;i<2000&&!enormousBraking.finished;i++)tick(enormousBraking,0.02);
+        check(enormousBraking.distance>0,"large braking must not freeze movement");
+        WalkSimulation tiny=new WalkSimulation(highway,5,0.00001,0.00002,0,0,0,0,new double[0],false,1);
+        tiny.advance(1);near(tiny.speed,0.00001,1e-10,"positive small acceleration accepted");
+        new WalkSimulation(highway,5,Double.MAX_VALUE,Double.MAX_VALUE,500,0,0,0,new double[0],false,1).advance(1);
+        for(double invalid:new double[]{0,-1,Double.NaN,Double.POSITIVE_INFINITY}){
+            try{new WalkSimulation(highway,5,invalid,0.8,0,0,1,1,new double[0],false,1);throw new AssertionError("invalid acceleration accepted");}catch(IllegalArgumentException expected){}
+        }
         try{new WalkSimulation(STRAIGHT,5,0.5,0.8,15,50,60,15,new double[0],false,1);throw new AssertionError("invalid wait accepted");}catch(IllegalArgumentException expected){}
         try{new WalkSimulation(STRAIGHT,5,0.5,0.8,15,50,15,60,new double[0],true,1);throw new AssertionError("open loop accepted");}catch(IllegalArgumentException expected){}
         System.out.println("PASS: bounded acceleration/braking, exact signal stops, green pass, waits, endpoint, pause/resume, seeded randomness, speed range, closed laps, close signals, callback timing, 100 randomized scenarios, unrestricted cruise, high speed stop, validation");
