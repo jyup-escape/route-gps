@@ -56,12 +56,15 @@ public class PlaybackService extends Service {
         try {
             boolean loop=intent.getBooleanExtra("loop",false);
             String coordinates;
+            if(intent.getBooleanExtra("routeBinary",false))route=RouteStore.load(new File(getFilesDir(),"playback-route.bin")).route;
+            else {
             if(intent.getBooleanExtra("routeFile",false)){
                 try(InputStream in=new FileInputStream(new File(getFilesDir(),"playback-route.txt"));ByteArrayOutputStream out=new ByteArrayOutputStream()){
                     byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1)out.write(b,0,n);coordinates=new String(out.toByteArray(),StandardCharsets.UTF_8);
                 }
             }else coordinates=intent.getStringExtra("route");
             route=new Route(Route.parse(coordinates),false);
+            }
             kmh=intent.getDoubleExtra("kmh",5);
             String signals=intent.getStringExtra("signals");
             if(intent.getBooleanExtra("signalsFile",false)){
