@@ -23,7 +23,7 @@ run(JDK/'javac.exe','-encoding','UTF-8','-classpath',TEST_CP,'-d',TEST,*[ROOT/'s
 for test in ['RouteTest','WalkSimulationTest','MapsLinkTest','GpxTest','GoogleRouteTest','RouteStoreTest']:run(JDK/'java.exe',*(['-Xmx192m'] if test=='RouteStoreTest' else []),'-cp',str(TEST)+os.pathsep+TEST_CP,test)
 run(BT/'aapt2.exe','compile','--dir',ROOT/'res','-o',BUILD/'resources.zip')
 RGEN=BUILD/'generated';RGEN.mkdir(exist_ok=True)
-run(BT/'aapt2.exe','link','-o',BUILD/'resources.apk','--manifest',ROOT/'AndroidManifest.xml','-I',ANDROID,'--java',RGEN,BUILD/'resources.zip')
+run(BT/'aapt2.exe','link','-o',BUILD/'resources.apk','--manifest',ROOT/'AndroidManifest.xml','-I',ANDROID,'--java',RGEN,'-A',ROOT/'assets',BUILD/'resources.zip')
 sources=list((ROOT/'src').rglob('*.java'))+list(RGEN.rglob('*.java'))
 run(JDK/'javac.exe','-encoding','UTF-8','-source','8','-target','8','-classpath',ANDROID,'-d',CLASSES,*sources)
 run(JDK/'java.exe','-cp',BT/'lib/d8.jar','com.android.tools.r8.D8','--lib',ANDROID,'--min-api','26','--output',DEX,*CLASSES.rglob('*.class'))

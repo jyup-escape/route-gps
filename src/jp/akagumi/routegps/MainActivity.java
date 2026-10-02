@@ -23,6 +23,7 @@ public class MainActivity extends Activity {
     private TextView status,detail,summary,routeSource;
     private Button start,pause,stop,importButton,roadButton,signalButton,mapsButton,exportButton;
     private Preview preview;
+    private UiShell shell;
     private Handler handler=new Handler();
     private boolean importing=false;
     private Route preparedRoute,exportRoute;private String sourceLabel="";private boolean settingRoute=false,restoring=false;
@@ -113,8 +114,30 @@ public class MainActivity extends Activity {
         routeInput.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int f){}public void onTextChanged(CharSequence s,int a,int b,int c){if(settingRoute)return;preparedRoute=null;sourceLabel="";signalInput.setText("");inspectRoute();}public void afterTextChanged(Editable e){}});
         acceptShare(getIntent());
         speed.addTextChangedListener(watch);loop.setOnCheckedChangeListener((b,c)->inspectRoute());inspectRoute();
+        shell=new UiShell(this,new UiShell.Host(){
+            public void field(String id,String value){
+                if(isDestroyed()||PlaybackService.active||importing)return;
+                if(id.equals("loop"))loop.setChecked(value.equals("true"));
+                else {EditText input=shellInputs().get(id);if(input!=null&&!input.getText().toString().equals(value))input.setText(value);}
+                save();update();
+            }
+            public void action(String id){
+                if(isDestroyed())return;
+                Map<String,Button> controls=shellControls();Button control=controls.get(id);
+                if(control!=null){if(control.isEnabled())control.performClick();return;}
+                String url=id.equals("attribution")?"https://routing.openstreetmap.de/about.html":id.equals("osmLicense")?"https://www.openstreetmap.org/copyright":id.equals("fixMap")?"https://www.openstreetmap.org":null;
+                try{if(url!=null)startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url)));
+                    else if(id.equals("developer"))startActivity(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS));
+                    else if(id.equals("location"))startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+                }catch(Exception e){toast("設定やサービスを開けませんでした："+e.getMessage());}
+            }
+            public void ready(){update();if(Intent.ACTION_SEND.equals(getIntent().getAction()))shell.showImport();}
+        });
+        setContentView(shell.view);
         if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},11);
     }
+    private Map<String,EditText> shellInputs(){Map<String,EditText> inputs=new LinkedHashMap<>();String[] ids={"maps","route","speed","acceleration","braking","variation","red","waitMin","waitMax","signals"};EditText[] views={mapsInput,routeInput,speed,acceleration,braking,variation,redChance,waitMin,waitMax,signalInput};for(int i=0;i<ids.length;i++)inputs.put(ids[i],views[i]);return inputs;}
+    private Map<String,Button> shellControls(){Map<String,Button> controls=new LinkedHashMap<>();String[] ids={"start","pause","stop","import","export","maps","road","signals"};Button[] views={start,pause,stop,importButton,exportButton,mapsButton,roadButton,signalButton};for(int i=0;i<ids.length;i++)controls.put(ids[i],views[i]);return controls;}
     private EditText number(LinearLayout body,String label,String value){body.addView(text(label,14));EditText e=new EditText(this);e.setSingleLine(true);e.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);e.setContentDescription(label);e.setText(value);body.addView(e);return e;}
     private double value(EditText e){try{return Double.parseDouble(e.getText().toString());}catch(NumberFormatException ex){throw new IllegalArgumentException(e.getContentDescription()+"を数値で入力してください");}}
     private Route currentRoute(){
@@ -131,7 +154,7 @@ public class MainActivity extends Activity {
         preparedRoute=route;sourceLabel=label.startsWith("Google Mapsの経由地から再計算")?"旧版でOSRM再計算した道筋（Googleの候補を再取得してください）":label;
         inspectedRoute=null;inspectedText="";settingRoute=true;
         try{routeInput.setText(RouteStore.editorPreview(route));}finally{settingRoute=false;}
-        if(signals!=null)signalInput.setText(signals);importing=false;inspectRoute();save();update();
+        if(signals!=null)signalInput.setText(signals);importing=false;inspectRoute();save();update();if(shell!=null&&signals!=null)shell.showPlay();
     }
     private WalkSimulation validateSimulation(){return new WalkSimulation(currentRoute(),value(speed),value(acceleration),value(braking),value(variation),value(redChance),value(waitMin),value(waitMax),WalkSimulation.parseSignals(signalInput.getText().toString()),loop.isChecked(),0);}
     private void inspectRoute(){try{
@@ -170,9 +193,18 @@ public class MainActivity extends Activity {
         roadButton.setEnabled(!active&&!importing);signalButton.setEnabled(!active&&!importing);mapsButton.setEnabled(!active&&!importing);mapsInput.setEnabled(!active&&!importing);exportButton.setEnabled(!active&&!importing&&preparedRoute!=null);
         for(EditText e:new EditText[]{acceleration,braking,variation,redChance,waitMin,waitMax,signalInput})e.setEnabled(!active&&!importing);
         if(!importing)routeSource.setText(preparedRoute==null?"徒歩ルート未作成：座標を入力して作成してください。":sourceLabel+" · 信号 "+(signalInput.getText().toString().trim().isEmpty()?0:signalInput.getText().toString().trim().split("[,\\s]+").length)+"地点");
+        if(shell!=null)try{
+            org.json.JSONObject fields=new org.json.JSONObject(),enabled=new org.json.JSONObject();
+            for(Map.Entry<String,EditText> entry:shellInputs().entrySet())fields.put(entry.getKey(),entry.getValue().getText().toString());fields.put("loop",String.valueOf(loop.isChecked()));
+            for(Map.Entry<String,Button> entry:shellControls().entrySet())enabled.put(entry.getKey(),entry.getValue().isEnabled());enabled.put("start",start.isEnabled()&&preparedRoute!=null);
+            org.json.JSONObject state=new org.json.JSONObject().put("fields",fields).put("enabled",enabled).put("prepared",preparedRoute!=null).put("state",PlaybackService.state).put("active",active).put("paused",PlaybackService.paused).put("busy",importing).put("busyLabel",routeSource.getText().toString()).put("source",preparedRoute!=null?routeSource.getText().toString():"").put("summary",preparedRoute!=null?summary.getText().toString():"").put("detail",detail.getText().toString()).put("error",PlaybackService.error).put("pointCount",preparedRoute!=null?preparedRoute.points.length:0).put("distance",preparedRoute!=null?preparedRoute.length:0).put("travelled",active?PlaybackService.travelled:0).put("actualKmh",active?PlaybackService.actualKmh:0);
+            shell.publish(state,preparedRoute,active,PlaybackService.travelled,PlaybackService.latitude,PlaybackService.longitude);
+        }catch(org.json.JSONException ignored){}
     }
     @Override public void onResume(){super.onResume();handler.post(refresh);}
     @Override public void onPause(){save();handler.removeCallbacks(refresh);super.onPause();}
+    @Override public void onDestroy(){handler.removeCallbacks(refresh);if(shell!=null)shell.destroy();super.onDestroy();}
+    @Override public void onBackPressed(){if(shell==null||!shell.back())super.onBackPressed();}
     @Override public void onRequestPermissionsResult(int request,String[] perms,int[] grants){super.onRequestPermissionsResult(request,perms,grants);if(request==10){if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED)begin();else toast("正確な位置情報の権限を許可してから再生してください。");}}
     @Override protected void onActivityResult(int req,int result,Intent data){super.onActivityResult(req,result,data);if(result!=RESULT_OK||data==null)return;
         if(req!=20&&req!=21)return;importing=true;update();final Route snapshot=exportRoute;
@@ -201,7 +233,7 @@ public class MainActivity extends Activity {
         }catch(Exception e){runOnUiThread(()->{importing=false;update();toast("Googleの道筋を取得できませんでした。現在のルートは変更していません。\n"+e.getMessage());});}},"google-route-import").start();
     }
     private void acceptShare(Intent intent){if(Intent.ACTION_SEND.equals(intent.getAction())){String text=intent.getStringExtra(Intent.EXTRA_TEXT);if(text!=null)mapsInput.setText(text);}}
-    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);acceptShare(intent);}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);acceptShare(intent);update();if(shell!=null&&Intent.ACTION_SEND.equals(intent.getAction()))shell.showImport();}
     private void fetchRoad(boolean signalsOnly){
         if(importing||PlaybackService.active)return;
         try{
