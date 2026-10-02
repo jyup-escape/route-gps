@@ -44,16 +44,28 @@ public final class MapsLink {
         if(out.size()<2)throw new IllegalArgumentException("出発地・目的地を含む2地点以上の経路リンクを使ってください");
         for(String p:out)if(p.trim().isEmpty()||p.equalsIgnoreCase("My Location")||p.equals("現在地"))throw new IllegalArgumentException("『現在地』を具体的な場所に変更してから経路を共有してください");
         // Some shared direction URLs contain exact place coordinates in data=.
-        // Use only a complete, unambiguous sequence of place blocks. Never @viewport.
+        // Match each top-level place block, including empty blocks for path coordinates.
+        // A mixed name/coordinate route must not discard its available endpoint coordinates.
         String path=decode(u.getRawPath());int data=path.indexOf("/data=");
         if(data>=0){
             String number="([+-]?[0-9]+(?:\\.[0-9]+)?)";
-            Matcher points=Pattern.compile("!1m5!1m1!1s[^!]+!2m2!1d"+number+"!2d"+number+"(?=!|$)").matcher(path.substring(data+6));
+            Matcher token=Pattern.compile("!([0-9]+)([a-z])([^!]*)").matcher(path.substring(data+6));
+            List<String> tokens=new ArrayList<>();while(token.find())tokens.add(token.group());
             List<String> embedded=new ArrayList<>();
-            while(points.find()){
-                String value=points.group(2)+","+points.group(1);coordinate(value);embedded.add(value);
+            boolean complete=true;
+            for(int i=0;i<tokens.size();i++){
+                Matcher block=Pattern.compile("!1m([0-9]+)").matcher(tokens.get(i));
+                if(!block.matches())continue;
+                int count=Integer.parseInt(block.group(1));
+                if(count>tokens.size()-i-1||embedded.size()>=out.size()){complete=false;break;}
+                StringBuilder body=new StringBuilder();for(int j=1;j<=count;j++)body.append(tokens.get(i+j));
+                Matcher point=Pattern.compile("!2m2!1d"+number+"!2d"+number+"(?=!|$)").matcher(body);
+                String value=out.get(embedded.size());
+                if(point.find()){value=point.group(2)+","+point.group(1);coordinate(value);if(point.find()){complete=false;break;}}
+                else if(count!=0||coordinate(value)==null){complete=false;break;}
+                embedded.add(value);i+=count;
             }
-            if(embedded.size()==out.size())return embedded;
+            if(complete&&embedded.size()==out.size())return embedded;
         }
         return out;
     }

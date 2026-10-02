@@ -17,6 +17,12 @@ public class MapsLinkTest {
         check(p.equals(Arrays.asList("49.446407,11.0818138","48.881203,2.365158")));
         p=MapsLink.places("https://www.google.com/maps/dir/A/B/C/data="+data);check(p.equals(Arrays.asList("A","B","C")));
         p=MapsLink.places("https://www.google.com/maps/dir/A/B/@49,11,15z/");check(p.equals(Arrays.asList("A","B")));
-        System.out.println("PASS: Maps URL endpoints, ordering, path URLs, blank origin, viewport rejection, host validation");
+        String mixed="!4m17!4m16!1m5!1m1!1sstart!2m2!1d139.745171!2d35.689313!1m0!1m0!1m0!1m5!1m1!1send!2m2!1d139.7044652!2d35.6951905!3e2";
+        p=MapsLink.places("https://www.google.com/maps/dir/Start+name/53.3462426,-6.2551211/-32.9344628,20.2574872/47.0854617,46.8004558/End+name/@8,19,3z/data="+mixed);
+        check(p.equals(Arrays.asList("35.689313,139.745171","53.3462426,-6.2551211","-32.9344628,20.2574872","47.0854617,46.8004558","35.6951905,139.7044652")));
+        String partial="!1m5!1m1!1sstart!2m2!1d139.745171!2d35.689313!1m0!1m0";
+        p=MapsLink.places("https://www.google.com/maps/dir/A/35,139/B/data="+partial);check(p.equals(Arrays.asList("A","35,139","B")));
+        p=MapsLink.places("https://www.google.com/maps/dir/A/35,139/B/data=!1m999999!1m0");check(p.equals(Arrays.asList("A","35,139","B")));
+        System.out.println("PASS: Maps URL endpoints, ordering, mixed name/coordinate waypoints, incomplete groups, path URLs, blank origin, viewport rejection, host validation");
     }
 }
