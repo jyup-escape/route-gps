@@ -44,6 +44,6 @@ Google MapsのURLから地点を取り込み、OpenStreetMapの徒歩ルート�
 
 配布はバージョン別のAPKとビルド元ソースZIPのみです。署名鍵、SDK/JDK、設定ツールは同梱しません。ソースをビルドする場合はWindowsで`python setup_tools.py`、`python build.py`を実行します。
 
-ルート・移動シミュレーション、URL解析、100000地点のGPX往復、上限超過・不正XMLをホスト上でテストし、Androidコンパイル・APK署名を検証しています。Android画面の操作、共有・保存・疑似GPS再生の実機検証は未完了です。
+ルート・移動シミュレーション、URL解析、100000地点のGPX往復、上限超過・不正XMLをホスト上でテストし、Androidコンパイル・APK署名を検証しています。Google Maps形式のURLからパリのOSRM徒歩ルートを実通信で作成し、GPX往復とNominatimの場所候補取得も確認しました。Android画面の操作、共有・保存・疑似GPS再生の実機検証は未完了です。
 
 道路生成：OSRM / FOSSGIS。地図データ：© OpenStreetMap contributors（ODbL）。場所名検索：Nominatim。
