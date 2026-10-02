@@ -18,15 +18,16 @@ import org.xmlpull.v1.*;
 public class MainActivity extends Activity {
     private static final int ACCENT=Color.rgb(0,107,88), INK=Color.rgb(23,35,42);
     private static final String DEMO="35.681236,139.767125\n35.682000,139.767125\n35.682000,139.768000\n35.681236,139.768000\n35.681236,139.767125";
-    private EditText routeInput,speed,acceleration,braking,variation,redChance,waitMin,waitMax,signalInput;
+    private EditText mapsInput,routeInput,speed,acceleration,braking,variation,redChance,waitMin,waitMax,signalInput;
     private CheckBox loop;
     private TextView status,detail,summary,routeSource;
-    private Button start,pause,stop,importButton,roadButton,signalButton;
+    private Button start,pause,stop,importButton,roadButton,signalButton,mapsButton,exportButton;
     private Preview preview;
     private Handler handler=new Handler();
     private boolean importing=false;
     private String preparedText="",sourceLabel="";
     private long lastNetwork=0;
+    private String inspectedText="",exportCoordinates="";private Route inspectedRoute;
     private final Runnable refresh=new Runnable(){public void run(){update();handler.postDelayed(this,500);}};
     private int dp(float x){return (int)(x*getResources().getDisplayMetrics().density+0.5f);}
     private TextView text(String value,int size){TextView v=new TextView(this);v.setText(value);v.setTextSize(size);v.setTextColor(INK);v.setPadding(0,dp(8),0,dp(8));return v;}
@@ -44,10 +45,17 @@ public class MainActivity extends Activity {
         summary=text("",14);body.addView(summary);
         routeSource=text("",14);body.addView(routeSource);
         importButton=button("GPXファイルを読み込む",body);importButton.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,20);});
-        body.addView(text("始点・経由地・終点を緯度,経度で入力（2〜25地点）",14));
+        body.addView(text("GPXは最大100000地点・50MBまで読み込めます。",12));
+        section(body,"Google MapsからGPXを作る");
+        mapsInput=new EditText(this);mapsInput.setHint("Google Mapsの経路リンクを貼り付け");mapsInput.setSingleLine(true);mapsInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_URI);mapsInput.setContentDescription("Google Mapsの経路リンク");body.addView(mapsInput);
+        mapsButton=button("リンクから徒歩ルートを作成",body);mapsButton.setOnClickListener(v->convertMaps());
+        body.addView(text("出発地・経由地・目的地から徒歩ルートを再計算します。Google Mapsで表示された道順とは異なる場合があります。場所名は候補を選んで確認できます。",12));
+        body.addView(text("短縮リンクはGoogleへ、場所名はNominatimへ、座標はOSRMへ送信します。場所の共有ではなく、出発地と目的地が入った経路を共有してください。",12));
+        exportButton=button("このルートをGPXで保存",body);exportButton.setOnClickListener(v->{try{new Route(Route.parse(preparedText),false);exportCoordinates=preparedText;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/gpx+xml");i.putExtra(Intent.EXTRA_TITLE,"RouteGPS-route.gpx");startActivityForResult(i,21);}catch(Exception e){toast("先にルートを作成するかGPXを読み込んでください");}});
+        body.addView(text("始点・経由地・終点を緯度,経度で入力（道路検索は2〜25地点）",14));
         routeInput=new EditText(this);routeInput.setTextSize(14);routeInput.setTypeface(Typeface.MONOSPACE);routeInput.setGravity(Gravity.TOP);routeInput.setMinLines(4);routeInput.setMaxLines(7);
         routeInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE|android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        routeInput.setContentDescription("ルート座標：各行に緯度,経度");body.addView(routeInput);
+        routeInput.setContentDescription("ルート座標：各行に緯度,経度");routeInput.setSaveEnabled(false);body.addView(routeInput);
         roadButton=button("道に沿う徒歩ルートを作成・信号を取得",body);
         roadButton.setOnClickListener(v->fetchRoad(false));
         body.addView(text("作成時に座標をOSRMへ、信号取得時にルートをOverpassへ送信します。ルート生成：OSRM / FOSSGIS · 地図データ © OpenStreetMap contributors（ODbL）",12));
@@ -79,8 +87,8 @@ public class MainActivity extends Activity {
         pause=button("一時停止",controls);pause.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1));pause.setOnClickListener(v->send("PAUSE"));
         stop=button("停止・位置情報を戻す",controls);stop.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1));stop.setOnClickListener(v->send("STOP"));
         section(body,"初回設定");
-        body.addView(text("Androidの開発者向けオプションで「仮の現在地情報アプリ」をRoute GPSに設定してください。BlueStacksで項目がない場合は、付属の設定スクリプトを使ってください。",14));
-        button("開発者向けオプションを開く",body).setOnClickListener(v->{try{startActivity(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS));}catch(Exception e){toast("開発者向けオプションがありません。付属スクリプトを使ってください。");}});
+        body.addView(text("Androidの開発者向けオプションで「仮の現在地情報アプリ」をRoute GPSに設定してください。",14));
+        button("開発者向けオプションを開く",body).setOnClickListener(v->{try{startActivity(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS));}catch(Exception e){toast("開発者向けオプションがありません。Androidの設定で仮の現在地情報アプリを選んでください。");}});
         button("位置情報の設定を開く",body).setOnClickListener(v->{try{startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));}catch(Exception e){toast("設定を開けませんでした");}});
         body.addView(text("終点では位置を保持します。停止すると疑似GPSを解除します。設定変更は停止後に行ってください。",12));
         android.content.SharedPreferences prefs=getPreferences(0);
@@ -90,6 +98,7 @@ public class MainActivity extends Activity {
         redChance.setText(prefs.getString("red","50"));waitMin.setText(prefs.getString("waitMin","15"));waitMax.setText(prefs.getString("waitMax","60"));signalInput.setText(prefs.getString("signals",""));
         TextWatcher watch=new TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int f){}public void onTextChanged(CharSequence s,int a,int b,int c){inspectRoute();}public void afterTextChanged(Editable e){}};
         routeInput.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int f){}public void onTextChanged(CharSequence s,int a,int b,int c){if(!s.toString().equals(preparedText)){preparedText="";sourceLabel="";signalInput.setText("");}inspectRoute();}public void afterTextChanged(Editable e){}});
+        acceptShare(getIntent());
         speed.addTextChangedListener(watch);loop.setOnCheckedChangeListener((b,c)->inspectRoute());inspectRoute();
         if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},11);
     }
@@ -97,7 +106,8 @@ public class MainActivity extends Activity {
     private double value(EditText e){try{return Double.parseDouble(e.getText().toString());}catch(NumberFormatException ex){throw new IllegalArgumentException(e.getContentDescription()+"を数値で入力してください");}}
     private WalkSimulation validateSimulation(){return new WalkSimulation(new Route(Route.parse(routeInput.getText().toString()),false),value(speed),value(acceleration),value(braking),value(variation),value(redChance),value(waitMin),value(waitMax),WalkSimulation.parseSignals(signalInput.getText().toString()),loop.isChecked(),0);}
     private void inspectRoute(){try{
-        Route r=new Route(Route.parse(routeInput.getText().toString()),false);preview.route=r;preview.invalidate();
+        String current=routeInput.getText().toString();if(!current.equals(inspectedText)||inspectedRoute==null){inspectedRoute=new Route(Route.parse(current),false);inspectedText=current;}
+        Route r=inspectedRoute;preview.route=r;preview.invalidate();
         double s=Double.parseDouble(speed.getText().toString());if(!Double.isFinite(s)||s<0.1)throw new IllegalArgumentException("巡航速度は0.1km/h以上の有限の数値で指定してください");
         summary.setText(String.format(Locale.JAPAN,"%d地点 · %.0f m · 巡航速度で約%.1f分＋加減速・信号待ち%s",r.points.length,r.length,r.length/(s/3.6)/60,loop.isChecked()?" / 周":""));
     }catch(Exception e){preview.route=null;preview.invalidate();summary.setText(e instanceof NumberFormatException?"速度を入力してください":e.getMessage());}}
@@ -105,7 +115,9 @@ public class MainActivity extends Activity {
         if(!routeInput.getText().toString().equals(preparedText))throw new IllegalArgumentException("先に『道に沿う徒歩ルートを作成』を押すか、道路に沿ったGPXを読み込んでください。");
         validateSimulation();double s=value(speed);
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},10);return;}
-        save();startForegroundService(new Intent(this,PlaybackService.class).setAction("START").putExtra("route",routeInput.getText().toString()).putExtra("kmh",s).putExtra("loop",loop.isChecked())
+        save();
+        try(OutputStream out=new FileOutputStream(new File(getFilesDir(),"playback-route.txt"))){out.write(preparedText.getBytes(java.nio.charset.StandardCharsets.UTF_8));}
+        startForegroundService(new Intent(this,PlaybackService.class).setAction("START").putExtra("routeFile",true).putExtra("kmh",s).putExtra("loop",loop.isChecked())
             .putExtra("acceleration",value(acceleration)).putExtra("braking",value(braking)).putExtra("variation",value(variation)).putExtra("red",value(redChance)).putExtra("waitMin",value(waitMin)).putExtra("waitMax",value(waitMax)).putExtra("signals",signalInput.getText().toString()));
     }catch(Exception e){toast(e instanceof NumberFormatException?"速度を入力してください":e.getMessage());}}
     private void send(String action){if(PlaybackService.active)startService(new Intent(this,PlaybackService.class).setAction(action));}
@@ -121,22 +133,43 @@ public class MainActivity extends Activity {
         else detail.setText("ルートと速度を確認して再生してください。");
         start.setEnabled(!active&&!importing);pause.setEnabled(active&&!PlaybackService.finished);stop.setEnabled(active);
         pause.setText(PlaybackService.paused?"再開":"ゆっくり一時停止");routeInput.setEnabled(!active&&!importing);speed.setEnabled(!active&&!importing);loop.setEnabled(!active&&!importing);importButton.setEnabled(!active&&!importing);preview.invalidate();
-        roadButton.setEnabled(!active&&!importing);signalButton.setEnabled(!active&&!importing);
+        roadButton.setEnabled(!active&&!importing);signalButton.setEnabled(!active&&!importing);mapsButton.setEnabled(!active&&!importing);mapsInput.setEnabled(!active&&!importing);exportButton.setEnabled(!active&&!importing&&!preparedText.isEmpty());
         for(EditText e:new EditText[]{acceleration,braking,variation,redChance,waitMin,waitMax,signalInput})e.setEnabled(!active&&!importing);
         if(!importing)routeSource.setText(preparedText.isEmpty()?"徒歩ルート未作成：座標を入力して作成してください。":sourceLabel+" · 信号 "+(signalInput.getText().toString().trim().isEmpty()?0:signalInput.getText().toString().trim().split("[,\\s]+").length)+"地点");
     }
     @Override public void onResume(){super.onResume();handler.post(refresh);}
     @Override public void onPause(){save();handler.removeCallbacks(refresh);super.onPause();}
     @Override public void onRequestPermissionsResult(int request,String[] perms,int[] grants){super.onRequestPermissionsResult(request,perms,grants);if(request==10){if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED)begin();else toast("正確な位置情報の権限を許可してから再生してください。");}}
-    @Override protected void onActivityResult(int req,int result,Intent data){super.onActivityResult(req,result,data);if(req!=20||result!=RESULT_OK||data==null)return;
-        importing=true;update();
-        new Thread(()->{try(InputStream in=getContentResolver().openInputStream(data.getData())){
-            ByteArrayOutputStream bytes=new ByteArrayOutputStream();byte[] buf=new byte[8192];int n;
-            while((n=in.read(buf))!=-1){bytes.write(buf,0,n);if(bytes.size()>5*1024*1024)throw new IOException("GPXは5MB以下にしてください");}
-            String parsed=parseGpx(new ByteArrayInputStream(bytes.toByteArray()));
+    @Override protected void onActivityResult(int req,int result,Intent data){super.onActivityResult(req,result,data);if(result!=RESULT_OK||data==null)return;
+        if(req!=20&&req!=21)return;importing=true;update();final String snapshot=exportCoordinates;
+        new Thread(()->{try{
+            if(req==21){try(OutputStream out=getContentResolver().openOutputStream(data.getData(),"wt")){Gpx.write(new Route(Route.parse(snapshot),false),out);}runOnUiThread(()->{importing=false;update();toast("GPXを保存しました");});return;}
+            String parsed;try(InputStream in=getContentResolver().openInputStream(data.getData())){parsed=Gpx.read(in);}
             runOnUiThread(()->{importing=false;preparedText=parsed;sourceLabel="GPXの形状を使用（通れる道かはGPX作成元で確認）";routeInput.setText(parsed);signalInput.setText("");save();update();});
-        }catch(Exception e){runOnUiThread(()->{importing=false;update();toast("GPX読込エラー："+e.getMessage());});}},"gpx-import").start();
+        }catch(Exception e){runOnUiThread(()->{importing=false;update();toast("GPX処理エラー："+e.getMessage());});}},"gpx-document").start();
     }
+    private void convertMaps(){
+        if(importing||PlaybackService.active)return;final String link=mapsInput.getText().toString();final boolean close=loop.isChecked();
+        importing=true;routeSource.setText("Google Mapsの経路リンクを読み込み中…");update();
+        new Thread(()->{try{
+            List<String> names=MapsLink.places(MapsClient.expand(link));double[][] points=new double[names.size()][2];
+            for(int i=0;i<names.size();i++){
+                String name=names.get(i);double[] p=MapsLink.coordinate(name);
+                if(p==null){
+                    List<MapsClient.Place> choices=MapsClient.search(name);final double[][] selected=new double[1][];
+                    java.util.concurrent.CountDownLatch ready=new java.util.concurrent.CountDownLatch(1);
+                    String[] labels=new String[choices.size()];for(int j=0;j<labels.length;j++)labels[j]=choices.get(j).label;
+                    runOnUiThread(()->{if(isFinishing()||isDestroyed()){ready.countDown();return;}new AlertDialog.Builder(this).setTitle("場所を確認："+name).setItems(labels,(d,n)->{selected[0]=choices.get(n).point;ready.countDown();}).setNegativeButton("キャンセル",(d,n)->ready.countDown()).setOnCancelListener(d->ready.countDown()).show();});
+                    if(!ready.await(5,java.util.concurrent.TimeUnit.MINUTES)||selected[0]==null)throw new IOException("変換をキャンセルしました");p=selected[0];
+                }points[i]=p;
+            }
+            runOnUiThread(()->routeSource.setText("経由地から徒歩ルートを作成中…"));
+            RoadClient.Result done=RoadClient.walking(points,close);
+            runOnUiThread(()->{importing=false;preparedText=done.coordinates;sourceLabel="Google Mapsの経由地から再計算した徒歩ルート（OSM）";routeInput.setText(done.coordinates);signalInput.setText(done.signals);save();update();if(!done.warning.isEmpty())toast(done.warning);});
+        }catch(Exception e){runOnUiThread(()->{importing=false;update();toast("変換できませんでした："+e.getMessage());});}},"maps-to-gpx").start();
+    }
+    private void acceptShare(Intent intent){if(Intent.ACTION_SEND.equals(intent.getAction())){String text=intent.getStringExtra(Intent.EXTRA_TEXT);if(text!=null)mapsInput.setText(text);}}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);acceptShare(intent);}
     private void fetchRoad(boolean signalsOnly){
         if(importing||PlaybackService.active)return;
         try{
@@ -155,40 +188,21 @@ public class MainActivity extends Activity {
             }catch(Exception e){runOnUiThread(()->{importing=false;update();toast("取得できませんでした："+e.getMessage());});}},"walking-route").start();
         }catch(Exception e){toast(e.getMessage());}
     }
-    static String parseGpx(InputStream in)throws Exception{
-        XmlPullParserFactory f=XmlPullParserFactory.newInstance();f.setNamespaceAware(true);XmlPullParser x=f.newPullParser();x.setInput(in,null);
-        List<double[]> track=new ArrayList<>(),rte=new ArrayList<>();int segments=0,routes=0;boolean isGpx=false;
-        for(int event=x.getEventType();event!=XmlPullParser.END_DOCUMENT;event=x.nextToken()){
-            if(event==XmlPullParser.DOCDECL)throw new IOException("DTD付きのGPXは読み込めません");
-            if(event!=XmlPullParser.START_TAG)continue;
-            String name=x.getName();
-            if("gpx".equals(name))isGpx=true;
-            if("trkseg".equals(name))segments++;
-            if("rte".equals(name))routes++;
-            if("trkpt".equals(name)||"rtept".equals(name)){
-                List<double[]> dest="trkpt".equals(name)?track:rte;
-                dest.add(new double[]{Double.parseDouble(x.getAttributeValue(null,"lat")),Double.parseDouble(x.getAttributeValue(null,"lon"))});
-                if(track.size()+rte.size()>5000)throw new IOException("最大5000地点です");
-            }
-        }
-        if(!isGpx)throw new IOException("GPX形式のファイルを選んでください");
-        List<double[]> ps=track.isEmpty()?rte:track;
-        if((!track.isEmpty()&&segments>1)||(track.isEmpty()&&routes>1))throw new IOException("1つのトラック区間またはルートを含むGPXを使ってください");
-        new Route(ps.toArray(new double[0][]),false);
-        StringBuilder out=new StringBuilder();for(double[] p:ps)out.append(p[0]).append(',').append(p[1]).append('\n');return out.toString();
-    }
     private class Preview extends View {
-        Route route;Paint pen=new Paint(Paint.ANTI_ALIAS_FLAG);
+        Route route,cachedRoute;Paint pen=new Paint(Paint.ANTI_ALIAS_FLAG);Path cachedPath;int cachedWidth,cachedHeight;double origin,cos,scale,centerX,centerY;
         Preview(){super(MainActivity.this);setBackgroundColor(Color.WHITE);setContentDescription("ルート形状と再生位置のプレビュー");}
         @Override protected void onDraw(Canvas c){super.onDraw(c);if(route==null){pen.setColor(INK);pen.setTextSize(dp(14));c.drawText("ルートを入力すると表示されます",dp(16),dp(36),pen);return;}
+            if(cachedRoute!=route||cachedWidth!=getWidth()||cachedHeight!=getHeight()){
             double minX=Double.MAX_VALUE,minY=Double.MAX_VALUE,maxX=-Double.MAX_VALUE,maxY=-Double.MAX_VALUE;
-            double origin=route.points[0][1],cos=Math.max(0.01,Math.cos(Math.toRadians(route.points[0][0])));
+            origin=route.points[0][1];cos=Math.max(0.01,Math.cos(Math.toRadians(route.points[0][0])));
             for(double[] p:route.points){double x=wrap(p[1]-origin)*cos,y=-p[0];minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);}
-            double scale=Math.min((getWidth()-dp(48))/Math.max(1e-6,maxX-minX),(getHeight()-dp(48))/Math.max(1e-6,maxY-minY));
-            double centerX=(minX+maxX)/2,centerY=(minY+maxY)/2;
+            scale=Math.min((getWidth()-dp(48))/Math.max(1e-6,maxX-minX),(getHeight()-dp(48))/Math.max(1e-6,maxY-minY));
+            centerX=(minX+maxX)/2;centerY=(minY+maxY)/2;
             Path path=new Path();
             for(int i=0;i<route.points.length;i++){double[] p=route.points[i];float x=(float)(getWidth()/2+(wrap(p[1]-origin)*cos-centerX)*scale),y=(float)(getHeight()/2+(-p[0]-centerY)*scale);if(i==0)path.moveTo(x,y);else path.lineTo(x,y);}
-            pen.setColor(ACCENT);pen.setStyle(Paint.Style.STROKE);pen.setStrokeWidth(dp(3));c.drawPath(path,pen);pen.setStyle(Paint.Style.FILL);
+            cachedPath=path;cachedRoute=route;cachedWidth=getWidth();cachedHeight=getHeight();
+            }
+            pen.setColor(ACCENT);pen.setStyle(Paint.Style.STROKE);pen.setStrokeWidth(dp(3));c.drawPath(cachedPath,pen);pen.setStyle(Paint.Style.FILL);
             for(int i:new int[]{0,route.points.length-1}){double[] p=route.points[i];pen.setColor(i==0?ACCENT:INK);c.drawCircle((float)(getWidth()/2+(wrap(p[1]-origin)*cos-centerX)*scale),(float)(getHeight()/2+(-p[0]-centerY)*scale),dp(5),pen);}
             if(PlaybackService.active){pen.setColor(Color.rgb(224,103,25));c.drawCircle((float)(getWidth()/2+(wrap(PlaybackService.longitude-origin)*cos-centerX)*scale),(float)(getHeight()/2+(-PlaybackService.latitude-centerY)*scale),dp(7),pen);}
         }
