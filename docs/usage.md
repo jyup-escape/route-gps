@@ -1,4 +1,4 @@
-# Route GPS 1.1.3
+# Route GPS 1.1.4
 
 徒歩ルートを疑似GPSとして再生するAndroid 8.0以上向けアプリです。電車・時刻表対応は開発中です。
 
@@ -47,3 +47,5 @@ Google MapsのURLから地点を取り込み、OpenStreetMapの徒歩ルート�
 ルート・移動シミュレーション、URL解析、100000地点のGPX往復、上限超過・不正XMLをホスト上でテストし、Androidコンパイル・APK署名を検証しています。Google Maps形式のURLからパリのOSRM徒歩ルートを実通信で作成し、GPX往復とNominatimの場所候補取得も確認しました。Android画面の操作、共有・保存・疑似GPS再生の実機検証は未完了です。
 
 道路生成：OSRM / FOSSGIS。地図データ：© OpenStreetMap contributors（ODbL）。場所名検索：Nominatim。
+
+1.1.4では共有経路URLに地点座標が含まれる場合、対応する全地点が確認できればその座標を使います。座標がない場合は場所名を検索し、混在する住所で見つからない場合は施設名のみで再検索して候補を確認します。
