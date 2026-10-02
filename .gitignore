@@ -1,0 +1,10 @@
+tools/
+build/
+*.keystore
+__pycache__/
+dist/
+*.apk
+*.apk.sha256
+*.apk.idsig
+*.zip
+.DS_Store
