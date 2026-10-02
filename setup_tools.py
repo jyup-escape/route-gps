@@ -50,3 +50,9 @@ def install(job):
 with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
     for result in pool.map(install, jobs):
         print(result, flush=True)
+
+# JVM-only XmlPull implementation for GPX tests; APK uses Android standard API.
+kxml_url='https://repo.maven.apache.org/maven2/net/sf/kxml/kxml2/2.3.0/kxml2-2.3.0.jar'
+kxml=fetch(kxml_url)
+if hashlib.sha1(kxml).hexdigest()!=fetch(kxml_url+'.sha1').decode().split()[0]:raise RuntimeError('KXML checksum mismatch')
+(ROOT/'test-kxml2.jar').write_bytes(kxml)

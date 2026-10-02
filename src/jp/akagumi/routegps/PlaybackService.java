@@ -5,6 +5,8 @@ import android.content.*;
 import android.location.*;
 import android.os.*;
 import java.util.*;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 
 public class PlaybackService extends Service {
     public static volatile String state="停止中", error="";
@@ -53,7 +55,13 @@ public class PlaybackService extends Service {
         cleanup();
         try {
             boolean loop=intent.getBooleanExtra("loop",false);
-            route=new Route(Route.parse(intent.getStringExtra("route")),false);
+            String coordinates;
+            if(intent.getBooleanExtra("routeFile",false)){
+                try(InputStream in=new FileInputStream(new File(getFilesDir(),"playback-route.txt"));ByteArrayOutputStream out=new ByteArrayOutputStream()){
+                    byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1)out.write(b,0,n);coordinates=new String(out.toByteArray(),StandardCharsets.UTF_8);
+                }
+            }else coordinates=intent.getStringExtra("route");
+            route=new Route(Route.parse(coordinates),false);
             kmh=intent.getDoubleExtra("kmh",5);
             simulation=new WalkSimulation(route,kmh,intent.getDoubleExtra("acceleration",0.5),intent.getDoubleExtra("braking",0.8),
                 intent.getDoubleExtra("variation",15),intent.getDoubleExtra("red",50),intent.getDoubleExtra("waitMin",15),intent.getDoubleExtra("waitMax",60),
@@ -95,7 +103,7 @@ public class PlaybackService extends Service {
     }
     private void updateNotification(){((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).notify(1,notification());}
     private void fail(Exception e){
-        error=e instanceof SecurityException?"疑似位置情報の許可が必要です。開発者向けオプションでRoute GPSを選ぶか、付属のBlueStacks設定スクリプトを実行してください。":e.getMessage();
+        error=e instanceof SecurityException?"疑似位置情報の許可が必要です。開発者向けオプションでRoute GPSを選んでください。":e.getMessage();
         if(error==null)error=e.toString();cleanup();state="開始できませんでした";stopSelf();
     }
     private void cleanup(){
