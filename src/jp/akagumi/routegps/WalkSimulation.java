@@ -15,6 +15,7 @@ public final class WalkSimulation {
     private boolean[] red;
     private double[] waits;
     private int nextSignal;
+    private int[] nextRed;
     private boolean pauseRequested=false;
     private double pauseDistance=0, targetCruise, changeIn=0;
 
@@ -43,6 +44,8 @@ public final class WalkSimulation {
     private void newLap(){
         nextSignal=0;red=new boolean[signals.length];waits=new double[signals.length];
         for(int i=0;i<signals.length;i++){red[i]=random.nextDouble()<redProbability;waits[i]=waitMin+random.nextDouble()*(waitMax-waitMin);}
+        nextRed=new int[signals.length+1];nextRed[signals.length]=signals.length;
+        for(int i=signals.length-1;i>=0;i--)nextRed[i]=red[i]?i:nextRed[i+1];
     }
     public void requestPause(){
         if(paused||finished||pauseRequested)return;
@@ -62,7 +65,7 @@ public final class WalkSimulation {
     }
     private double nextStop(){
         double stop=route.length;
-        for(int i=nextSignal;i<signals.length;i++)if(red[i]){stop=signals[i];break;}
+        int redIndex=nextRed[nextSignal];if(redIndex<signals.length)stop=signals[redIndex];
         return pauseRequested?Math.min(stop,pauseDistance):stop;
     }
     public void advance(double seconds){
@@ -113,7 +116,6 @@ public final class WalkSimulation {
     public static double[] parseSignals(String text){
         if(text.trim().isEmpty())return new double[0];
         String[] pieces=text.trim().split("[,\\s]+");double[] result=new double[pieces.length];
-        if(pieces.length>500)throw new IllegalArgumentException("信号は最大500地点です");
         for(int i=0;i<pieces.length;i++){try{result[i]=Double.parseDouble(pieces[i]);}catch(NumberFormatException e){throw new IllegalArgumentException("信号位置を始点からの距離（m）で入力してください");}}
         return result;
     }

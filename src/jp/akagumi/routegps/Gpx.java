@@ -6,14 +6,8 @@ import org.xmlpull.v1.*;
 import java.util.*;
 
 public final class Gpx {
-    public static final int MAX_BYTES=50*1024*1024;
     public static String read(InputStream raw)throws Exception {
-        InputStream limited=new FilterInputStream(raw){long count;
-            private void add(int n)throws IOException{if(n>0&&(count+=n)>MAX_BYTES)throw new IOException("GPXは50MB以下にしてください");}
-            public int read()throws IOException{int n=super.read();add(n<0?0:1);return n;}
-            public int read(byte[] b,int o,int n)throws IOException{int r=in.read(b,o,n);add(r);return r;}
-        };
-        XmlPullParserFactory f=XmlPullParserFactory.newInstance();f.setNamespaceAware(true);XmlPullParser x=f.newPullParser();x.setInput(limited,null);
+        XmlPullParserFactory f=XmlPullParserFactory.newInstance();f.setNamespaceAware(true);XmlPullParser x=f.newPullParser();x.setInput(raw,null);
         List<double[]> track=new ArrayList<>(),rte=new ArrayList<>();int segments=0,routes=0;boolean isGpx=false;
         for(int event=x.getEventType();event!=XmlPullParser.END_DOCUMENT;event=x.nextToken()){
             if(event==XmlPullParser.DOCDECL)throw new IOException("DTD付きのGPXは読み込めません");
@@ -23,7 +17,6 @@ public final class Gpx {
             if("trkpt".equals(name)||"rtept".equals(name)){
                 List<double[]> dest="trkpt".equals(name)?track:rte;
                 dest.add(new double[]{Double.parseDouble(x.getAttributeValue(null,"lat")),Double.parseDouble(x.getAttributeValue(null,"lon"))});
-                if(track.size()+rte.size()>Route.MAX_POINTS)throw new IOException("最大100000地点です");
             }
         }
         if(!isGpx)throw new IOException("GPX形式のファイルを選んでください");

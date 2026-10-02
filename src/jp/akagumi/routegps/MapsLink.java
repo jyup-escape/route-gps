@@ -41,7 +41,7 @@ public final class MapsLink {
             }
             while(!out.isEmpty()&&out.get(out.size()-1).isEmpty())out.remove(out.size()-1);
         }
-        if(out.size()<2||out.size()>25)throw new IllegalArgumentException("出発地・目的地を含む2〜25地点の経路リンクを使ってください");
+        if(out.size()<2)throw new IllegalArgumentException("出発地・目的地を含む2地点以上の経路リンクを使ってください");
         for(String p:out)if(p.trim().isEmpty()||p.equalsIgnoreCase("My Location")||p.equals("現在地"))throw new IllegalArgumentException("『現在地』を具体的な場所に変更してから経路を共有してください");
         // Some shared direction URLs contain exact place coordinates in data=.
         // Use only a complete, unambiguous sequence of place blocks. Never @viewport.
