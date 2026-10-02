@@ -12,6 +12,7 @@ final class UiShell {
     interface Host {void field(String id,String value);void action(String id);void ready();}
     final WebView view;
     private boolean ready;
+    private String page="play";
     private Route cachedRoute;
     private RouteProjection projection;
     private JSONObject geometry;
@@ -23,6 +24,7 @@ final class UiShell {
         view.addJavascriptInterface(new Object(){
             @JavascriptInterface public void field(String id,String value){if(FIELDS.contains(id))activity.runOnUiThread(()->host.field(id,value));}
             @JavascriptInterface public void action(String id){if(ACTIONS.contains(id))activity.runOnUiThread(()->host.action(id));}
+            @JavascriptInterface public void page(String id){if(Arrays.asList("play","import","settings").contains(id))activity.runOnUiThread(()->UiShell.this.page=id);}
             @JavascriptInterface public void ready(){activity.runOnUiThread(()->{ready=true;cachedRoute=null;host.ready();});}
         },"NativeRoute");
         view.setWebViewClient(new WebViewClient(){
@@ -55,4 +57,6 @@ final class UiShell {
     }
     void destroy(){ready=false;view.removeJavascriptInterface("NativeRoute");view.destroy();}
     void showPlay(){if(ready)view.evaluateJavascript("window.RouteUI&&window.RouteUI.navigate('play')",null);}
+    void showImport(){if(ready)view.evaluateJavascript("window.RouteUI&&window.RouteUI.navigate('import')",null);}
+    boolean back(){if(!page.equals("play")){showPlay();return true;}return false;}
 }

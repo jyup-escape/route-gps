@@ -131,7 +131,7 @@ public class MainActivity extends Activity {
                     else if(id.equals("location"))startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
                 }catch(Exception e){toast("設定やサービスを開けませんでした："+e.getMessage());}
             }
-            public void ready(){update();}
+            public void ready(){update();if(Intent.ACTION_SEND.equals(getIntent().getAction()))shell.showImport();}
         });
         setContentView(shell.view);
         if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},11);
@@ -154,7 +154,7 @@ public class MainActivity extends Activity {
         preparedRoute=route;sourceLabel=label.startsWith("Google Mapsの経由地から再計算")?"旧版でOSRM再計算した道筋（Googleの候補を再取得してください）":label;
         inspectedRoute=null;inspectedText="";settingRoute=true;
         try{routeInput.setText(RouteStore.editorPreview(route));}finally{settingRoute=false;}
-        if(signals!=null)signalInput.setText(signals);importing=false;inspectRoute();save();update();if(shell!=null)shell.showPlay();
+        if(signals!=null)signalInput.setText(signals);importing=false;inspectRoute();save();update();if(shell!=null&&signals!=null)shell.showPlay();
     }
     private WalkSimulation validateSimulation(){return new WalkSimulation(currentRoute(),value(speed),value(acceleration),value(braking),value(variation),value(redChance),value(waitMin),value(waitMax),WalkSimulation.parseSignals(signalInput.getText().toString()),loop.isChecked(),0);}
     private void inspectRoute(){try{
@@ -204,6 +204,7 @@ public class MainActivity extends Activity {
     @Override public void onResume(){super.onResume();handler.post(refresh);}
     @Override public void onPause(){save();handler.removeCallbacks(refresh);super.onPause();}
     @Override public void onDestroy(){handler.removeCallbacks(refresh);if(shell!=null)shell.destroy();super.onDestroy();}
+    @Override public void onBackPressed(){if(shell==null||!shell.back())super.onBackPressed();}
     @Override public void onRequestPermissionsResult(int request,String[] perms,int[] grants){super.onRequestPermissionsResult(request,perms,grants);if(request==10){if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED)begin();else toast("正確な位置情報の権限を許可してから再生してください。");}}
     @Override protected void onActivityResult(int req,int result,Intent data){super.onActivityResult(req,result,data);if(result!=RESULT_OK||data==null)return;
         if(req!=20&&req!=21)return;importing=true;update();final Route snapshot=exportRoute;
@@ -232,7 +233,7 @@ public class MainActivity extends Activity {
         }catch(Exception e){runOnUiThread(()->{importing=false;update();toast("Googleの道筋を取得できませんでした。現在のルートは変更していません。\n"+e.getMessage());});}},"google-route-import").start();
     }
     private void acceptShare(Intent intent){if(Intent.ACTION_SEND.equals(intent.getAction())){String text=intent.getStringExtra(Intent.EXTRA_TEXT);if(text!=null)mapsInput.setText(text);}}
-    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);acceptShare(intent);}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);acceptShare(intent);update();if(shell!=null&&Intent.ACTION_SEND.equals(intent.getAction()))shell.showImport();}
     private void fetchRoad(boolean signalsOnly){
         if(importing||PlaybackService.active)return;
         try{

@@ -3,7 +3,7 @@
  const $=id=>document.getElementById(id),fields=['maps','route','speed','acceleration','braking','variation','red','waitMin','waitMax','signals','loop'];
  let current={},geometry=null,page='play',preview=false;
  function native(method,...args){if(window.NativeRoute&&typeof window.NativeRoute[method]==='function'){window.NativeRoute[method](...args);return true;}return false;}
- function navigate(name){if(!['play','import','settings'].includes(name))return;page=name;document.querySelectorAll('.page').forEach(e=>e.hidden=e.id!==name);document.querySelectorAll('.navigation button').forEach(e=>{if(e.dataset.page===name)e.setAttribute('aria-current','page');else e.removeAttribute('aria-current');});window.scrollTo(0,0);if(name==='play')draw();}
+ function navigate(name){if(!['play','import','settings'].includes(name))return;page=name;document.querySelectorAll('.page').forEach(e=>e.hidden=e.id!==name);document.querySelectorAll('.navigation button').forEach(e=>{if(e.dataset.page===name)e.setAttribute('aria-current','page');else e.removeAttribute('aria-current');});window.scrollTo(0,0);if(name==='play')draw();native('page',name);}
  document.querySelectorAll('[data-page]').forEach(e=>e.addEventListener('click',()=>navigate(e.dataset.page)));
  document.querySelector('.brand').addEventListener('click',e=>{e.preventDefault();navigate('play');});
  fields.forEach(id=>$(id).addEventListener('input',()=>{const value=id==='loop'?String($(id).checked):$(id).value;native('field',id,value);if(!window.NativeRoute){current.fields=current.fields||{};current.fields[id]=value;if(id==='speed')metrics();}}));
