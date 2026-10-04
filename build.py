@@ -19,7 +19,7 @@ KXML=TOOLS/'test-kxml2.jar'
 JSON=TOOLS/'test-json.jar'
 TEST_CP=str(KXML)+os.pathsep+str(JSON)
 if not KXML.exists():raise RuntimeError('Run setup_tools.py to prepare GPX test dependency')
-run(JDK/'javac.exe','-encoding','UTF-8','-classpath',TEST_CP,'-d',TEST,*[ROOT/'src/jp/akagumi/routegps'/n for n in ['Route.java','WalkSimulation.java','MapsLink.java','Gpx.java','RouteWindow.java','RoadClient.java','GoogleRoute.java','RouteProjection.java','RouteStore.java']],*[ROOT/'tests'/n for n in ['RouteTest.java','WalkSimulationTest.java','MapsLinkTest.java','GpxTest.java','GoogleRouteTest.java','RouteStoreTest.java']])
+run(JDK/'javac.exe','-encoding','UTF-8','-classpath',TEST_CP,'-d',TEST,*[ROOT/'src/jp/akagumi/routegps'/n for n in ['Route.java','LoopConnection.java','FixedPosition.java','WalkSimulation.java','MapsLink.java','Gpx.java','RouteWindow.java','RoadClient.java','GoogleRoute.java','RouteProjection.java','RouteStore.java']],*[ROOT/'tests'/n for n in ['RouteTest.java','WalkSimulationTest.java','MapsLinkTest.java','GpxTest.java','GoogleRouteTest.java','RouteStoreTest.java']])
 for test in ['RouteTest','WalkSimulationTest','MapsLinkTest','GpxTest','GoogleRouteTest','RouteStoreTest']:run(JDK/'java.exe',*(['-Xmx192m'] if test=='RouteStoreTest' else []),'-cp',str(TEST)+os.pathsep+TEST_CP,test)
 run(BT/'aapt2.exe','compile','--dir',ROOT/'res','-o',BUILD/'resources.zip')
 RGEN=BUILD/'generated';RGEN.mkdir(exist_ok=True)

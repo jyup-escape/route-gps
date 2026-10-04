@@ -12,6 +12,8 @@ public class PlaybackService extends Service {
     public static volatile String state="停止中", error="";
     public static volatile double travelled=0, total=0, latitude=0, longitude=0, kmh=0, actualKmh=0;
     public static volatile boolean active=false, paused=false, finished=false;
+    public static volatile boolean stationary=false;
+    private double[] fixedPosition;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final List<String> owned=new ArrayList<>();
     private LocationManager manager;
@@ -24,6 +26,7 @@ public class PlaybackService extends Service {
         if(!active)return;
         try {
             long now=SystemClock.elapsedRealtime();
+            if(stationary){publish();handler.postDelayed(this,250);return;}
             simulation.advance(Math.min(5,(now-last)/1000.0));
             last=now;
             travelled=simulation.distance;actualKmh=simulation.speed*3.6;
@@ -43,17 +46,22 @@ public class PlaybackService extends Service {
         if(intent==null){stopSelf();return START_NOT_STICKY;}
         String action=intent.getAction();
         if("STOP".equals(action)){
-            if(active){stopping=true;simulation.requestPause();state="停止に向けて減速中";updateNotification();}
+            if(active&&!stationary){stopping=true;simulation.requestPause();state="停止に向けて減速中";updateNotification();}
             else {cleanup();state="停止中";stopSelf();}
             return START_NOT_STICKY;
         }
-        if("PAUSE".equals(action) && active && !stopping){
+        if("PAUSE".equals(action) && active && !stopping&&!stationary){
             if(simulation.paused)simulation.resume();else simulation.requestPause();
             paused=simulation.paused;state=simulation.phase();updateNotification();return START_NOT_STICKY;
         }
         if(!"START".equals(action)) {if(!active)stopSelf();return START_NOT_STICKY;}
         cleanup();
         try {
+            stationary=intent.getBooleanExtra("stationary",false);
+            if(stationary){
+                fixedPosition=FixedPosition.parse(intent.getStringExtra("position"));
+                kmh=0;travelled=0;total=0;actualKmh=0;paused=false;finished=false;stopping=false;error="";state="静止中";
+            }else{
             boolean loop=intent.getBooleanExtra("loop",false);
             String coordinates;
             if(intent.getBooleanExtra("routeBinary",false))route=RouteStore.load(new File(getFilesDir(),"playback-route.bin")).route;
@@ -74,6 +82,7 @@ public class PlaybackService extends Service {
                 intent.getDoubleExtra("variation",15),intent.getDoubleExtra("red",50),intent.getDoubleExtra("waitMin",15),intent.getDoubleExtra("waitMax",60),
                 WalkSimulation.parseSignals(signals),loop,System.nanoTime());
             travelled=0;total=route.length;actualKmh=0;paused=false;finished=false;stopping=false;error="";state="準備中";
+            }
             startForeground(1,notification());
             for(String provider:new String[]{"gps","network","fused"}) {
                 try {
@@ -84,17 +93,17 @@ public class PlaybackService extends Service {
             }
             wake=((PowerManager)getSystemService(POWER_SERVICE)).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"RouteGPS:playback");
             wake.acquire();
-            active=true;state="再生中";last=SystemClock.elapsedRealtime();publish();updateNotification();handler.postDelayed(tick,250);
+            active=true;state=stationary?"静止中":"再生中";last=SystemClock.elapsedRealtime();publish();updateNotification();handler.postDelayed(tick,250);
         } catch(Exception e) {fail(e);}
         return START_NOT_STICKY;
     }
     private void publish(){
-        double[] p=route.at(travelled); latitude=p[0];longitude=p[1];
+        double[] p=stationary?fixedPosition:route.at(travelled); latitude=p[0];longitude=p[1];
         long time=System.currentTimeMillis(),nano=SystemClock.elapsedRealtimeNanos();
         for(String provider:owned){
             Location loc=new Location(provider);loc.setLatitude(latitude);loc.setLongitude(longitude);
             loc.setAltitude(0);loc.setAccuracy(3);loc.setSpeed((float)(actualKmh/3.6));
-            loc.setBearing(route.bearing(travelled));loc.setTime(time);loc.setElapsedRealtimeNanos(nano);
+            loc.setBearing(stationary?0:route.bearing(travelled));loc.setTime(time);loc.setElapsedRealtimeNanos(nano);
             manager.setTestProviderLocation(provider,loc);
         }
     }
@@ -103,10 +112,11 @@ public class PlaybackService extends Service {
         PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,MainActivity.class),flags);
         PendingIntent stop=PendingIntent.getService(this,1,new Intent(this,PlaybackService.class).setAction("STOP"),flags);
         PendingIntent pause=PendingIntent.getService(this,2,new Intent(this,PlaybackService.class).setAction("PAUSE"),flags);
-        return new Notification.Builder(this,"playback").setSmallIcon(android.R.drawable.ic_menu_mylocation)
-            .setContentTitle("Route GPS · "+state).setContentText(String.format(Locale.JAPAN,"巡航速度 %.2f km/h",kmh))
-            .setContentIntent(open).setOngoing(true).addAction(new Notification.Action.Builder(null,paused?"再開":"一時停止",pause).build())
-            .addAction(new Notification.Action.Builder(null,"停止",stop).build()).build();
+        Notification.Builder builder=new Notification.Builder(this,"playback").setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setContentTitle("Route GPS · "+state).setContentText(stationary?"指定位置を保持中 · 速度 0 km/h":String.format(Locale.JAPAN,"巡航速度 %.2f km/h",kmh))
+            .setContentIntent(open).setOngoing(true);
+        if(!stationary)builder.addAction(new Notification.Action.Builder(null,paused?"再開":"一時停止",pause).build());
+        return builder.addAction(new Notification.Action.Builder(null,"停止",stop).build()).build();
     }
     private void updateNotification(){((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).notify(1,notification());}
     private void fail(Exception e){
@@ -114,7 +124,7 @@ public class PlaybackService extends Service {
         if(error==null)error=e.toString();cleanup();state="開始できませんでした";stopSelf();
     }
     private void cleanup(){
-        active=false;paused=false;finished=false;actualKmh=0;stopping=false;handler.removeCallbacks(tick);
+        active=false;paused=false;finished=false;actualKmh=0;stopping=false;stationary=false;fixedPosition=null;handler.removeCallbacks(tick);
         for(String provider:owned){try{manager.removeTestProvider(provider);}catch(RuntimeException ignored){}}
         owned.clear();
         if(wake!=null && wake.isHeld())wake.release();wake=null;
