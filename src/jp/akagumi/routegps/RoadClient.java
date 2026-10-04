@@ -12,6 +12,19 @@ public final class RoadClient {
         public String coordinates,signals,warning="";
     }
     public interface Progress { void report(String message); }
+    public static Route closeLoop(Route route,String mode)throws Exception{
+        LoopConnection.checkGap(route);
+        if(LoopConnection.gap(route)<=2)return route;
+        if(!mode.equals("foot")&&!mode.equals("car"))throw new IllegalArgumentException("接続道路の移動手段を選んでください。");
+        double[] end=route.points[route.points.length-1],start=route.points[0];
+        String url="https://routing.openstreetmap.de/routed-"+mode+"/route/v1/driving/"+end[1]+","+end[0]+";"+start[1]+","+start[0]+"?overview=full&geometries=geojson&steps=false&radiuses=5;5&generate_hints=false";
+        JSONObject response=new JSONObject(request(url,null));
+        if(!"Ok".equals(response.optString("code")))throw new IOException("周回用の接続道路が見つかりません："+response.optString("code"));
+        JSONArray geometry=response.getJSONArray("routes").getJSONObject(0).getJSONObject("geometry").getJSONArray("coordinates");
+        double[][] points=new double[geometry.length()][2];
+        for(int i=0;i<points.length;i++){JSONArray p=geometry.getJSONArray(i);points[i]=new double[]{p.getDouble(1),p.getDouble(0)};}
+        return LoopConnection.join(route,new Route(points,false));
+    }
     public static Result walking(double[][] waypoints,boolean loop)throws Exception{return walking(waypoints,loop,m->{});}
     public static Result walking(double[][] waypoints,boolean loop,Progress progress)throws Exception{
         new Route(waypoints,false);

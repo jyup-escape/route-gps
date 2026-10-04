@@ -16,8 +16,8 @@ final class UiShell {
     private Route cachedRoute;
     private RouteProjection projection;
     private JSONObject geometry;
-    private static final Set<String> FIELDS=new HashSet<>(Arrays.asList("maps","route","speed","acceleration","braking","variation","red","waitMin","waitMax","signals","loop"));
-    private static final Set<String> ACTIONS=new HashSet<>(Arrays.asList("start","pause","stop","import","export","maps","road","signals","developer","location","attribution","osmLicense","fixMap"));
+    private static final Set<String> FIELDS=new HashSet<>(Arrays.asList("maps","route","speed","acceleration","braking","variation","red","waitMin","waitMax","signals","loop","stationary","position","connectionMode"));
+    private static final Set<String> ACTIONS=new HashSet<>(Arrays.asList("start","pause","stop","import","export","maps","road","signals","developer","location","attribution","osmLicense","fixMap","connect"));
     UiShell(Activity activity,Host host){
         view=new WebView(activity);view.setBackgroundColor(android.graphics.Color.WHITE);
         WebSettings settings=view.getSettings();settings.setJavaScriptEnabled(true);settings.setTextZoom(Math.round(100*activity.getResources().getConfiguration().fontScale));settings.setAllowFileAccess(false);settings.setAllowContentAccess(false);settings.setDomStorageEnabled(false);settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);

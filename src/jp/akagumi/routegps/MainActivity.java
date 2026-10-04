@@ -19,7 +19,9 @@ public class MainActivity extends Activity {
     private static final int ACCENT=Color.rgb(0,107,88), INK=Color.rgb(23,35,42);
     private static final String DEMO="35.681236,139.767125\n35.682000,139.767125\n35.682000,139.768000\n35.681236,139.768000\n35.681236,139.767125";
     private EditText mapsInput,routeInput,speed,acceleration,braking,variation,redChance,waitMin,waitMax,signalInput;
-    private CheckBox loop;
+    private CheckBox loop,stationary;
+    private EditText fixedPosition,connectionMode;
+    private Button connectButton;
     private TextView status,detail,summary,routeSource;
     private Button start,pause,stop,importButton,roadButton,signalButton,mapsButton,exportButton;
     private Preview preview;
@@ -67,6 +69,10 @@ public class MainActivity extends Activity {
         body.addView(text("巡航速度（km/h）· 0.1以上、上限なし",14));
         speed=new EditText(this);speed.setSingleLine(true);speed.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);speed.setContentDescription("移動速度、単位km/h");body.addView(speed);
         loop=new CheckBox(this);loop.setText("周回する（ONにして徒歩ルートを作成）");loop.setMinHeight(dp(48));body.addView(loop);
+        stationary=new CheckBox(this);stationary.setText("静止モード");body.addView(stationary);
+        fixedPosition=new EditText(this);fixedPosition.setContentDescription("静止位置、緯度と経度");body.addView(fixedPosition);
+        connectionMode=new EditText(this);connectionMode.setText("foot");body.addView(connectionMode);
+        connectButton=button("周回用の道路を接続",body);connectButton.setOnClickListener(v->connectLoop());
         section(body,"歩き方");
         acceleration=number(body,"歩き始めの加速度（m/s²）· 上限なし", "0.5");
         braking=number(body,"止まるときの減速度（m/s²）· 上限なし", "0.8");
@@ -107,6 +113,7 @@ public class MainActivity extends Activity {
                 runOnUiThread(()->{restoring=false;applyRoute(loaded.route,loaded.label,null);});
             }catch(Exception e){runOnUiThread(()->{restoring=false;importing=false;update();toast("保存ルートを復元できませんでした："+e.getMessage());});}},"route-restore").start();
         }
+        stationary.setChecked(prefs.getBoolean("stationary",false));fixedPosition.setText(prefs.getString("position",""));connectionMode.setText(prefs.getString("connectionMode","foot"));
         speed.setText(prefs.getString("speed","5"));loop.setChecked(prefs.getBoolean("loop",false));
         acceleration.setText(prefs.getString("acceleration","0.5"));braking.setText(prefs.getString("braking","0.8"));variation.setText(prefs.getString("variation","15"));
         redChance.setText(prefs.getString("red","50"));waitMin.setText(prefs.getString("waitMin","15"));waitMax.setText(prefs.getString("waitMax","60"));signalInput.setText(prefs.getString("signals",""));
@@ -118,6 +125,7 @@ public class MainActivity extends Activity {
             public void field(String id,String value){
                 if(isDestroyed()||PlaybackService.active||importing)return;
                 if(id.equals("loop"))loop.setChecked(value.equals("true"));
+                else if(id.equals("stationary"))stationary.setChecked(value.equals("true"));
                 else {EditText input=shellInputs().get(id);if(input!=null&&!input.getText().toString().equals(value))input.setText(value);}
                 save();update();
             }
@@ -136,8 +144,8 @@ public class MainActivity extends Activity {
         setContentView(shell.view);
         if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},11);
     }
-    private Map<String,EditText> shellInputs(){Map<String,EditText> inputs=new LinkedHashMap<>();String[] ids={"maps","route","speed","acceleration","braking","variation","red","waitMin","waitMax","signals"};EditText[] views={mapsInput,routeInput,speed,acceleration,braking,variation,redChance,waitMin,waitMax,signalInput};for(int i=0;i<ids.length;i++)inputs.put(ids[i],views[i]);return inputs;}
-    private Map<String,Button> shellControls(){Map<String,Button> controls=new LinkedHashMap<>();String[] ids={"start","pause","stop","import","export","maps","road","signals"};Button[] views={start,pause,stop,importButton,exportButton,mapsButton,roadButton,signalButton};for(int i=0;i<ids.length;i++)controls.put(ids[i],views[i]);return controls;}
+    private Map<String,EditText> shellInputs(){Map<String,EditText> inputs=new LinkedHashMap<>();String[] ids={"maps","route","speed","acceleration","braking","variation","red","waitMin","waitMax","signals","position","connectionMode"};EditText[] views={mapsInput,routeInput,speed,acceleration,braking,variation,redChance,waitMin,waitMax,signalInput,fixedPosition,connectionMode};for(int i=0;i<ids.length;i++)inputs.put(ids[i],views[i]);return inputs;}
+    private Map<String,Button> shellControls(){Map<String,Button> controls=new LinkedHashMap<>();String[] ids={"start","pause","stop","import","export","maps","road","signals","connect"};Button[] views={start,pause,stop,importButton,exportButton,mapsButton,roadButton,signalButton,connectButton};for(int i=0;i<ids.length;i++)controls.put(ids[i],views[i]);return controls;}
     private EditText number(LinearLayout body,String label,String value){body.addView(text(label,14));EditText e=new EditText(this);e.setSingleLine(true);e.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);e.setContentDescription(label);e.setText(value);body.addView(e);return e;}
     private double value(EditText e){try{return Double.parseDouble(e.getText().toString());}catch(NumberFormatException ex){throw new IllegalArgumentException(e.getContentDescription()+"を数値で入力してください");}}
     private Route currentRoute(){
@@ -162,8 +170,28 @@ public class MainActivity extends Activity {
         double s=Double.parseDouble(speed.getText().toString());if(!Double.isFinite(s)||s<0.1)throw new IllegalArgumentException("巡航速度は0.1km/h以上の有限の数値で指定してください");
         summary.setText(String.format(Locale.JAPAN,"%d地点 · %.0f m · 巡航速度で約%.1f分＋加減速・信号待ち%s",r.points.length,r.length,r.length/(s/3.6)/60,loop.isChecked()?" / 周":""));
     }catch(Exception e){preview.route=null;preview.invalidate();summary.setText(e instanceof NumberFormatException?"速度を入力してください":e.getMessage());}}
+    private void connectLoop(){try{
+        if(importing||PlaybackService.active)return;
+        if(preparedRoute==null)throw new IllegalArgumentException("先にGPXやGoogle Mapsのルートを読み込んでください。");
+        final Route original=preparedRoute;LoopConnection.checkGap(original);
+        if(LoopConnection.gap(original)<=2){toast("このルートはすでに周回できます。");return;}
+        if(SystemClock.elapsedRealtime()-lastNetwork<2000)throw new IllegalArgumentException("少し待ってから再試行してください。");
+        final String mode=connectionMode.getText().toString(),label=sourceLabel,signals=signalInput.getText().toString();
+        importing=true;lastNetwork=SystemClock.elapsedRealtime();routeSource.setText("終点から始点までの道路を確認中…");update();
+        new Thread(()->{try{
+            Route connected=RoadClient.closeLoop(original,mode);
+            installRoute(connected,label+" · 周回接続（"+(mode.equals("car")?"車":"徒歩")+"）",signals);
+            runOnUiThread(()->{loop.setChecked(true);save();update();toast(String.format(Locale.JAPAN,"道路に沿って接続しました。追加距離 %.1f m。プレビューを確認して再生してください。",connected.length-original.length));});
+        }catch(Exception e){runOnUiThread(()->{importing=false;update();toast("周回接続できませんでした："+e.getMessage());});}},"loop-connection").start();
+    }catch(Exception e){toast(e.getMessage());}}
     private void begin(){try{
+        if(stationary.isChecked()){
+            FixedPosition.parse(fixedPosition.getText().toString());
+            if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},10);return;}
+            save();startForegroundService(new Intent(this,PlaybackService.class).setAction("START").putExtra("stationary",true).putExtra("position",fixedPosition.getText().toString()));return;
+        }
         if(preparedRoute==null)throw new IllegalArgumentException("先に『道に沿う徒歩ルートを作成』を押すか、道路に沿ったGPXを読み込んでください。");
+        if(loop.isChecked()&&LoopConnection.gap(preparedRoute)>2){LoopConnection.checkGap(preparedRoute);throw new IllegalArgumentException("周回用に道路を接続してください。接続道路の移動手段を選び、周回用の道路を接続ボタンを押してください。");}
         validateSimulation();double s=value(speed);
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},10);return;}
         save();
@@ -179,24 +207,26 @@ public class MainActivity extends Activity {
     }catch(Exception e){toast(e instanceof NumberFormatException?"速度を入力してください":e.getMessage());}}
     private void send(String action){if(PlaybackService.active)startService(new Intent(this,PlaybackService.class).setAction(action));}
     private void toast(String s){new AlertDialog.Builder(this).setMessage(s).setPositiveButton("OK",null).show();}
-    private void save(){if(restoring)return;getPreferences(0).edit().putBoolean("routeStored",preparedRoute!=null).remove("preparedText").putString("route",preparedRoute==null?routeInput.getText().toString():"").putString("speed",speed.getText().toString()).putBoolean("loop",loop.isChecked())
+    private void save(){if(restoring)return;getPreferences(0).edit().putBoolean("routeStored",preparedRoute!=null).remove("preparedText").putString("route",preparedRoute==null?routeInput.getText().toString():"").putString("speed",speed.getText().toString()).putBoolean("loop",loop.isChecked()).putBoolean("stationary",stationary.isChecked()).putString("position",fixedPosition.getText().toString()).putString("connectionMode",connectionMode.getText().toString())
         .putString("sourceLabel",sourceLabel).putString("acceleration",acceleration.getText().toString()).putString("braking",braking.getText().toString()).putString("variation",variation.getText().toString())
         .putString("red",redChance.getText().toString()).putString("waitMin",waitMin.getText().toString()).putString("waitMax",waitMax.getText().toString()).putString("signals",signalInput.getText().toString()).apply();}
     private void update(){
         boolean active=PlaybackService.active;
         status.setText(PlaybackService.state);
         if(!PlaybackService.error.isEmpty())detail.setText(PlaybackService.error);
+        else if(active&&PlaybackService.stationary)detail.setText(String.format(Locale.JAPAN,"静止位置 %.6f, %.6f · 速度 0 km/h",PlaybackService.latitude,PlaybackService.longitude));
         else if(active)detail.setText(String.format(Locale.JAPAN,"%.6f, %.6f\n%.0f / %.0f m · 現在 %.2f km/h / 巡航 %.2f",PlaybackService.latitude,PlaybackService.longitude,PlaybackService.travelled,PlaybackService.total,PlaybackService.actualKmh,PlaybackService.kmh));
         else detail.setText("ルートと速度を確認して再生してください。");
-        start.setEnabled(!active&&!importing);pause.setEnabled(active&&!PlaybackService.finished);stop.setEnabled(active);
+        connectButton.setEnabled(!active&&!importing&&preparedRoute!=null);
+        start.setEnabled(!active&&!importing);pause.setEnabled(active&&!PlaybackService.finished&&!PlaybackService.stationary);stop.setEnabled(active);
         pause.setText(PlaybackService.paused?"再開":"ゆっくり一時停止");routeInput.setEnabled(!active&&!importing);speed.setEnabled(!active&&!importing);loop.setEnabled(!active&&!importing);importButton.setEnabled(!active&&!importing);preview.invalidate();
         roadButton.setEnabled(!active&&!importing);signalButton.setEnabled(!active&&!importing);mapsButton.setEnabled(!active&&!importing);mapsInput.setEnabled(!active&&!importing);exportButton.setEnabled(!active&&!importing&&preparedRoute!=null);
         for(EditText e:new EditText[]{acceleration,braking,variation,redChance,waitMin,waitMax,signalInput})e.setEnabled(!active&&!importing);
         if(!importing)routeSource.setText(preparedRoute==null?"徒歩ルート未作成：座標を入力して作成してください。":sourceLabel+" · 信号 "+(signalInput.getText().toString().trim().isEmpty()?0:signalInput.getText().toString().trim().split("[,\\s]+").length)+"地点");
         if(shell!=null)try{
             org.json.JSONObject fields=new org.json.JSONObject(),enabled=new org.json.JSONObject();
-            for(Map.Entry<String,EditText> entry:shellInputs().entrySet())fields.put(entry.getKey(),entry.getValue().getText().toString());fields.put("loop",String.valueOf(loop.isChecked()));
-            for(Map.Entry<String,Button> entry:shellControls().entrySet())enabled.put(entry.getKey(),entry.getValue().isEnabled());enabled.put("start",start.isEnabled()&&preparedRoute!=null);
+            for(Map.Entry<String,EditText> entry:shellInputs().entrySet())fields.put(entry.getKey(),entry.getValue().getText().toString());fields.put("loop",String.valueOf(loop.isChecked()));fields.put("stationary",String.valueOf(stationary.isChecked()));
+            for(Map.Entry<String,Button> entry:shellControls().entrySet())enabled.put(entry.getKey(),entry.getValue().isEnabled());enabled.put("start",start.isEnabled()&&(stationary.isChecked()||preparedRoute!=null));
             org.json.JSONObject state=new org.json.JSONObject().put("fields",fields).put("enabled",enabled).put("prepared",preparedRoute!=null).put("state",PlaybackService.state).put("active",active).put("paused",PlaybackService.paused).put("busy",importing).put("busyLabel",routeSource.getText().toString()).put("source",preparedRoute!=null?routeSource.getText().toString():"").put("summary",preparedRoute!=null?summary.getText().toString():"").put("detail",detail.getText().toString()).put("error",PlaybackService.error).put("pointCount",preparedRoute!=null?preparedRoute.points.length:0).put("distance",preparedRoute!=null?preparedRoute.length:0).put("travelled",active?PlaybackService.travelled:0).put("actualKmh",active?PlaybackService.actualKmh:0);
             shell.publish(state,preparedRoute,active,PlaybackService.travelled,PlaybackService.latitude,PlaybackService.longitude);
         }catch(org.json.JSONException ignored){}

@@ -28,7 +28,7 @@ public final class WalkSimulation {
                 ||!nonnegative(waitMin)||!nonnegative(waitMax)||waitMax<waitMin)
             throw new IllegalArgumentException("巡航速度は0.1km/h以上、加減速度は0より大きく、ゆらぎ・待ち時間は0以上、赤の確率は0〜100%で指定してください。すべて有限の数値で、待ち時間は最小≦最大です。");
         if(loop && Route.distance(route.points[0],route.points[route.points.length-1])>2)
-            throw new IllegalArgumentException("周回には始点に戻る徒歩ルートが必要です。周回をONにして徒歩ルートを作り直してください。");
+            throw new IllegalArgumentException("周回用の道路を接続してください。始点・終点が100m以内なら道路検索で接続できます。");
         cruise=cruiseKmh/3.6;this.acceleration=acceleration;this.braking=braking;
         variation=variationPercent/100;redProbability=redPercent/100;
         if(!Double.isFinite(cruise*(1+variation)))throw new IllegalArgumentException("設定から計算する速度が数値の表現範囲を超えています。速度かゆらぎを小さくしてください。");

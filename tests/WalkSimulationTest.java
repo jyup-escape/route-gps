@@ -16,6 +16,17 @@ public class WalkSimulationTest {
         check(Double.isFinite(s.speed)&&Double.isFinite(s.distance),"non-finite state");
     }
     public static void main(String[] args){
+        Route almostClosed=new Route(new double[][]{{35,139},{35.001,139},{35.0004,139}},false);
+        Route connector=new Route(new double[][]{{35.0004,139},{35.0002,139.0001},{35,139}},false);
+        Route joined=LoopConnection.join(almostClosed,connector);
+        check(LoopConnection.gap(joined)<0.001,"road connection closes loop");
+        for(int i=0;i<almostClosed.points.length;i++)near(Route.distance(joined.points[i],almostClosed.points[i]),0,1e-8,"original geometry retained");
+        check(joined.length>almostClosed.length+40,"road connector added");
+        new WalkSimulation(joined,5,0.5,0.8,0,0,0,0,new double[0],true,1);
+        try{LoopConnection.join(almostClosed,new Route(new double[][]{{36,139},{35,139}},false));throw new AssertionError("disconnected road accepted");}catch(IllegalArgumentException expected){}
+        try{LoopConnection.checkGap(STRAIGHT);throw new AssertionError("gap above 100m accepted");}catch(IllegalArgumentException expected){}
+        near(FixedPosition.parse("35.681236,139.767125")[0],35.681236,1e-8,"fixed coordinate parse");
+        for(String invalid:new String[]{"","NaN,139","35,Infinity","91,0","0,181","35,139,140"})try{FixedPosition.parse(invalid);throw new AssertionError("invalid fixed position accepted: "+invalid);}catch(IllegalArgumentException expected){}
         WalkSimulation accelerating=make(0,new double[0],1);
         accelerating.advance(1);near(accelerating.speed,0.5,1e-6,"acceleration from rest");near(accelerating.distance,0.25,1e-6,"integrated acceleration");
         WalkSimulation red=make(100,new double[]{50},2);boolean sawWait=false;
